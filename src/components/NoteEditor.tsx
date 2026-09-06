@@ -134,6 +134,19 @@ export function NoteEditor({
     [allNotes, note.id],
   )
   const isLanding = childNotes.length > 0
+  const childEntryCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const child of childNotes) {
+      counts.set(
+        child.id,
+        allNotes.filter((item) => item.parentId === child.id).length,
+      )
+    }
+    return counts
+  }, [allNotes, childNotes])
+  const landingTitle = note.title.includes('：')
+    ? note.title.split('：')[0]
+    : note.title
 
   const patch = (value: Partial<Note>) => setDraft((current) => ({ ...current, ...value }))
 
@@ -253,15 +266,51 @@ export function NoteEditor({
 
       <div className={`editor-layout ${isLanding ? 'is-landing' : ''}`}>
         <main className="editor-main">
-          {childNotes.length > 0 && (
-            <section className="child-kb-top">
-              <div className="child-kb-top-head">
-                <h3>
-                  <Database size={15} />
-                  子知识库
-                  <span>{childNotes.length}</span>
-                </h3>
-                <div className="child-create child-create-top">
+          {isLanding && (
+            <div className="category-landing">
+              <header className="category-landing-head">
+                <span className="category-landing-icon">
+                  <Database size={20} />
+                </span>
+                <div>
+                  <p>{landingTitle}</p>
+                  <h1>子知识库</h1>
+                </div>
+              </header>
+
+              <div className="kb-nav-grid">
+                {childNotes.map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    className="kb-nav-card"
+                    onClick={() => onOpen(child.id)}
+                  >
+                    <span className="kb-nav-card-icon">
+                      <Database size={18} />
+                    </span>
+                    <span className="kb-nav-card-copy">
+                      <strong>{child.title}</strong>
+                      <small>
+                        {childEntryCounts.get(child.id) ?? 0} 个条目
+                      </small>
+                    </span>
+                    <ArrowRight size={17} />
+                  </button>
+                ))}
+              </div>
+
+              <section className="kb-create-zone">
+                <div className="kb-create-zone-head">
+                  <span>
+                    <Plus size={17} />
+                  </span>
+                  <div>
+                    <strong>新建子知识库</strong>
+                    <small>新的机房运维分类</small>
+                  </div>
+                </div>
+                <div className="kb-create-form">
                   <input
                     value={childTitle}
                     onChange={(event) => setChildTitle(event.target.value)}
@@ -271,39 +320,20 @@ export function NoteEditor({
                         addChild()
                       }
                     }}
-                    placeholder="新知识库名称"
+                    placeholder="输入新知识库名称"
                     aria-label="新知识库名称"
                   />
                   <button
                     type="button"
-                    className="icon-btn"
+                    className="btn btn-primary"
                     onClick={addChild}
-                    title="新建知识库"
                   >
-                    <Plus size={15} />
+                    <Plus size={16} />
+                    创建知识库
                   </button>
                 </div>
-              </div>
-              <div className="child-kb-top-grid">
-                {childNotes.map((child) => (
-                  <button
-                    key={child.id}
-                    type="button"
-                    className="child-kb-card"
-                    onClick={() => onOpen(child.id)}
-                  >
-                    <span className="child-kb-card-icon">
-                      <Database size={16} />
-                    </span>
-                    <span>
-                      <strong>{child.title}</strong>
-                      <small>{child.tags.slice(0, 2).join(' / ') || '知识库'}</small>
-                    </span>
-                    <ArrowRight size={15} />
-                  </button>
-                ))}
-              </div>
-            </section>
+              </section>
+            </div>
           )}
 
           {!isLanding && (

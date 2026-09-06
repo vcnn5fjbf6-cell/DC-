@@ -248,6 +248,59 @@ export function NoteEditor({
 
       <div className="editor-layout">
         <main className="editor-main">
+          {childNotes.length > 0 && (
+            <section className="child-kb-top">
+              <div className="child-kb-top-head">
+                <h3>
+                  <Database size={15} />
+                  子知识库
+                  <span>{childNotes.length}</span>
+                </h3>
+                <div className="child-create child-create-top">
+                  <input
+                    value={childTitle}
+                    onChange={(event) => setChildTitle(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') {
+                        event.preventDefault()
+                        addChild()
+                      }
+                    }}
+                    placeholder="新知识库名称"
+                    aria-label="新知识库名称"
+                  />
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    onClick={addChild}
+                    title="新建知识库"
+                  >
+                    <Plus size={15} />
+                  </button>
+                </div>
+              </div>
+              <div className="child-kb-top-grid">
+                {childNotes.map((child) => (
+                  <button
+                    key={child.id}
+                    type="button"
+                    className="child-kb-card"
+                    onClick={() => onOpen(child.id)}
+                  >
+                    <span className="child-kb-card-icon">
+                      <Database size={16} />
+                    </span>
+                    <span>
+                      <strong>{child.title}</strong>
+                      <small>{child.tags.slice(0, 2).join(' / ') || '知识库'}</small>
+                    </span>
+                    <ArrowRight size={15} />
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+
           <input
             className="note-title-input"
             value={draft.title}
@@ -301,44 +354,6 @@ export function NoteEditor({
         </main>
 
         <aside className="editor-meta">
-          <section className="meta-block child-kb-block">
-            <h3>
-              <Database size={14} />
-              子知识库
-              <span>{childNotes.length}</span>
-            </h3>
-            <div className="child-create">
-              <input
-                value={childTitle}
-                onChange={(event) => setChildTitle(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault()
-                    addChild()
-                  }
-                }}
-                placeholder="新知识库名称"
-                aria-label="新知识库名称"
-              />
-              <button type="button" className="icon-btn" onClick={addChild} title="新建知识库">
-                <Plus size={15} />
-              </button>
-            </div>
-            {childNotes.length > 0 ? (
-              <div className="child-kb-list">
-                {childNotes.map((child) => (
-                  <button key={child.id} onClick={() => onOpen(child.id)}>
-                    <span className="child-kb-dot" />
-                    <span>{child.title}</span>
-                    <ArrowRight size={13} />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="attachment-empty">暂无子知识库</p>
-            )}
-          </section>
-
           <section className="meta-block">
             <h3>归属</h3>
             <label>

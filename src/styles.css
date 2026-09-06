@@ -1682,6 +1682,118 @@ textarea {
   gap: 12px;
 }
 
+.child-kb-top {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 13px 13px;
+  background: #f5f8f5;
+  border: 1px solid #d8e3dc;
+  border-radius: 8px;
+}
+
+.child-kb-top-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.child-kb-top-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #334a41;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.child-kb-top-head h3 svg {
+  color: var(--accent);
+}
+
+.child-kb-top-head h3 span {
+  min-width: 22px;
+  padding: 1px 7px;
+  color: #35665b;
+  background: #dcece5;
+  border-radius: 10px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.child-create-top {
+  flex: 0 0 auto;
+  min-width: 210px;
+}
+
+.child-create-top input {
+  min-height: 30px;
+}
+
+.child-kb-top-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.child-kb-card {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px 10px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  text-align: left;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.child-kb-card:hover {
+  border-color: #8cb7aa;
+  box-shadow: 0 1px 4px rgba(23, 107, 99, 0.1);
+}
+
+.child-kb-card-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  border-radius: 7px;
+}
+
+.child-kb-card > span:nth-child(2) {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.child-kb-card strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
+.child-kb-card small {
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.child-kb-card > svg {
+  color: #94a29a;
+}
+
 .note-title-input {
   width: 100%;
   padding: 4px 2px 8px;
@@ -2912,6 +3024,16 @@ textarea {
 }
 
 @media (max-width: 620px) {
+  .child-kb-top-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .child-create-top {
+    width: 100%;
+    min-width: 0;
+  }
+
   .stat-grid {
     grid-template-columns: 1fr 1fr;
     gap: 9px;

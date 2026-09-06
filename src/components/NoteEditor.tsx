@@ -133,6 +133,7 @@ export function NoteEditor({
         ),
     [allNotes, note.id],
   )
+  const isLanding = childNotes.length > 0
 
   const patch = (value: Partial<Note>) => setDraft((current) => ({ ...current, ...value }))
 
@@ -210,43 +211,47 @@ export function NoteEditor({
             onClick={onCreate}
           >
             <FilePlus2 size={16} />
-            新建条目
+            {isLanding && !note.parentId ? '新建知识库' : '新建条目'}
           </button>
-          <span
-            className={`save-state ${
-              saveState === 'pending' ? 'is-pending' : ''
-            }`}
-          >
-            {saveState === 'pending' ? (
-              <>
-                <Save size={13} />
-                正在保存
-              </>
-            ) : (
-              <>
-                <Check size={13} />
-                已保存
-              </>
-            )}
-          </span>
-          <StarToggle
-            starred={draft.starred}
-            onClick={() => patch({ starred: !draft.starred })}
-          />
-          <button
-            type="button"
-            className="btn btn-danger-ghost"
-            onClick={() => {
-              if (window.confirm(`确定删除“${draft.title}”吗？`)) onDelete()
-            }}
-          >
-            <Trash2 size={16} />
-            删除
-          </button>
+          {!isLanding && (
+            <>
+              <span
+                className={`save-state ${
+                  saveState === 'pending' ? 'is-pending' : ''
+                }`}
+              >
+                {saveState === 'pending' ? (
+                  <>
+                    <Save size={13} />
+                    正在保存
+                  </>
+                ) : (
+                  <>
+                    <Check size={13} />
+                    已保存
+                  </>
+                )}
+              </span>
+              <StarToggle
+                starred={draft.starred}
+                onClick={() => patch({ starred: !draft.starred })}
+              />
+              <button
+                type="button"
+                className="btn btn-danger-ghost"
+                onClick={() => {
+                  if (window.confirm(`确定删除“${draft.title}”吗？`)) onDelete()
+                }}
+              >
+                <Trash2 size={16} />
+                删除
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="editor-layout">
+      <div className={`editor-layout ${isLanding ? 'is-landing' : ''}`}>
         <main className="editor-main">
           {childNotes.length > 0 && (
             <section className="child-kb-top">
@@ -301,59 +306,63 @@ export function NoteEditor({
             </section>
           )}
 
-          <input
-            className="note-title-input"
-            value={draft.title}
-            onChange={(event) => changeTitle(event.target.value)}
-            placeholder="无标题知识"
-            aria-label="条目标题"
-          />
-          <input
-            className="note-source-input"
-            value={draft.source ?? ''}
-            onChange={(event) => patch({ source: event.target.value })}
-            placeholder="来源或出处"
-            aria-label="来源"
-          />
+          {!isLanding && (
+            <>
+              <input
+                className="note-title-input"
+                value={draft.title}
+                onChange={(event) => changeTitle(event.target.value)}
+                placeholder="无标题知识"
+                aria-label="条目标题"
+              />
+              <input
+                className="note-source-input"
+                value={draft.source ?? ''}
+                onChange={(event) => patch({ source: event.target.value })}
+                placeholder="来源或出处"
+                aria-label="来源"
+              />
 
-          <div className="editor-tabs">
-            <button
-              type="button"
-              className={mode === 'edit' ? 'is-active' : ''}
-              onClick={() => setMode('edit')}
-            >
-              <PencilLine size={15} />
-              编辑
-            </button>
-            <button
-              type="button"
-              className={mode === 'preview' ? 'is-active' : ''}
-              onClick={() => setMode('preview')}
-            >
-              <Eye size={15} />
-              预览
-            </button>
-          </div>
+              <div className="editor-tabs">
+                <button
+                  type="button"
+                  className={mode === 'edit' ? 'is-active' : ''}
+                  onClick={() => setMode('edit')}
+                >
+                  <PencilLine size={15} />
+                  编辑
+                </button>
+                <button
+                  type="button"
+                  className={mode === 'preview' ? 'is-active' : ''}
+                  onClick={() => setMode('preview')}
+                >
+                  <Eye size={15} />
+                  预览
+                </button>
+              </div>
 
-          {mode === 'edit' ? (
-            <textarea
-              className="note-body-input"
-              value={draft.body}
-              onChange={(event) => patch({ body: event.target.value })}
-              spellCheck={false}
-              aria-label="Markdown 正文"
-            />
-          ) : (
-            <div
-              className="markdown-preview"
-              onClick={handlePreviewClick}
-              dangerouslySetInnerHTML={{ __html: html }}
-            />
+              {mode === 'edit' ? (
+                <textarea
+                  className="note-body-input"
+                  value={draft.body}
+                  onChange={(event) => patch({ body: event.target.value })}
+                  spellCheck={false}
+                  aria-label="Markdown 正文"
+                />
+              ) : (
+                <div
+                  className="markdown-preview"
+                  onClick={handlePreviewClick}
+                  dangerouslySetInnerHTML={{ __html: html }}
+                />
+              )}
+            </>
           )}
-
         </main>
 
-        <aside className="editor-meta">
+        {!isLanding && (
+          <aside className="editor-meta">
           <section className="meta-block">
             <h3>归属</h3>
             <label>
@@ -504,7 +513,8 @@ export function NoteEditor({
               <time>{formatDate(note.updatedAt)}</time>
             </p>
           </section>
-        </aside>
+          </aside>
+        )}
       </div>
     </div>
   )

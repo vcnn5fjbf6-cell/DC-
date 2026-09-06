@@ -1675,6 +1675,17 @@ textarea {
   padding: 20px 26px 42px;
 }
 
+.editor-layout.is-landing {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.editor-layout.is-landing .editor-main {
+  width: 100%;
+  max-width: 900px;
+  align-self: center;
+  margin: 0 auto;
+}
+
 .editor-main {
   min-width: 0;
   display: flex;

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.allknow.knowledge-platform</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>/Users/majinli/mycodex/AI开发项目/知识库平台/scripts/serve.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/majinli/mycodex/AI开发项目/知识库平台</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ProcessType</key>
+  <string>Interactive</string>
+  <key>StandardOutPath</key>
+  <string>/tmp/allknow-knowledge-platform.out.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/allknow-knowledge-platform.err.log</string>
+</dict>
+</plist>

@@ -20,7 +20,7 @@ import {
 } from '../lib/fileStore'
 import {
   extractFileText,
-  generateAttachmentDescription,
+  generateStructuredAttachmentContent,
 } from '../lib/aiExtract'
 import { relativeTime, uid } from '../lib/notes'
 
@@ -207,7 +207,7 @@ export function AttachmentPanel({
       for (let index = 0; index < files.length; index += 1) {
         const content = await extractFileText(files[index])
         if (!content.trim()) continue
-        const result = await generateAttachmentDescription(
+        const result = await generateStructuredAttachmentContent(
           files[index].name,
           content,
         )

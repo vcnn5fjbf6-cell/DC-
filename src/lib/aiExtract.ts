@@ -64,8 +64,9 @@ function detectMainCategory(fileName: string, content: string): string {
 
 function classifyLine(line: string): string {
   const text = line.toLowerCase()
-  if (/风险|注意|禁止|必须|不得|隐患|安全|警告/.test(text)) return '风险与注意事项'
+  if (/风险|注意|隐患|安全|警告/.test(text)) return '风险与注意事项'
   if (/故障|告警|异常|报修|处置|应急|恢复/.test(text)) return '故障与应急处置'
+  if (/必须|不得|禁止|要求|标准|规范|一致/.test(text)) return '要求与标准'
   if (/巡检|检查|验收|核对|确认|复查|清单/.test(text)) return '检查与巡检'
   if (/流程|步骤|操作|安装|配置|部署|上架|实施|执行|移交/.test(text)) return '流程与步骤'
   if (/温度|湿度|电压|电流|功率|频率|型号|容量|参数|UPS|空调|配电/.test(text)) return '设备与参数'
@@ -73,6 +74,45 @@ function classifyLine(line: string): string {
   if (/台账|记录|日志|变更|资产|编号|库存|备件/.test(text)) return '记录与台账'
   if (/文档|资料|文件|模板|制度|规范|手册/.test(text)) return '文件与资料'
   return '其他内容'
+}
+
+function splitSemanticUnit(text: string): string[] {
+  if (text.length <= 36) return [text]
+  const boundaries = [
+    '验收单要求',
+    '验收要求',
+    '验收记录',
+    '记录由',
+    '温度高于',
+    '温度低于',
+    '巡检记录',
+    '巡检发现',
+    '发现风险',
+    '风险隐患',
+    '值班负责人',
+    '必须记录',
+    '每周检查',
+    '每日登记',
+    '发现异常',
+    '立即上报',
+    '同时',
+  ]
+  const cutPoints: number[] = []
+  for (const boundary of boundaries) {
+    const start = text.indexOf(boundary)
+    if (start > 8 && !cutPoints.includes(start)) cutPoints.push(start)
+  }
+  cutPoints.sort((a, b) => a - b)
+  if (cutPoints.length === 0) return [text]
+  const parts: string[] = []
+  let start = 0
+  for (const point of cutPoints) {
+    if (point - start < 10) continue
+    parts.push(text.slice(start, point).trim())
+    start = point
+  }
+  parts.push(text.slice(start).trim())
+  return parts.filter(Boolean)
 }
 
 export async function extractFileText(file: File): Promise<string> {
@@ -175,7 +215,36 @@ async function structureWithAi(
   const data = (await response.json()) as {
     choices?: Array<{ message?: { content?: string } }>
   }
-  return data.choices?.[0]?.message?.content?.trim() ?? ''
+  const structured = data.choices?.[0]?.message?.content?.trim() ?? ''
+  return /^###\s/m.test(structured) ? structured : ''
+}
+
+function splitLogicalUnits(text: string): string[] {
+  const cleaned = text.replace(/\t/g, '；').replace(/[ \t]{2,}/g, ' ').trim()
+  if (!cleaned) return []
+  const punctuationUnits = cleaned
+    .split(/(?<=[。！？；;.!?])\s*/u)
+    .map((unit) => unit.trim())
+    .filter((unit) => unit.length > 1)
+  return punctuationUnits.flatMap((unit) => splitSemanticUnit(unit))
+}
+
+function polishLine(text: string): string {
+  return text
+    .replace(/^[\s>#*•·\-—]+/, '')
+    .replace(/^[\d一二三四五六七八九十]+[.、．)]\s*/, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+}
+
+function extractHeading(line: string): string | null {
+  const clean = line.replace(/^#{1,6}\s*/, '').replace(/[*_]/g, '').trim()
+  if (clean.length > 90) return null
+  const headingPattern =
+    /^(第\s*[一二三四五六七八九十百\d]+\s*[章节篇部分]|附录|附件|目的|适用范围|职责|流程|步骤|操作|要求|标准|检查|巡检|记录|应急|风险|注意|数据|参数|清单|制度|规范)/u
+  const numberedPattern = /^([一二三四五六七八九十]+[、.．]|\d+\s*[.、．])\s*\S/u
+  if (headingPattern.test(clean) || numberedPattern.test(clean)) return clean
+  return null
 }
 
 function localStructuredContent(fileName: string, content: string): string {
@@ -183,19 +252,27 @@ function localStructuredContent(fileName: string, content: string): string {
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-  const compact = lines.join(' ').replace(/\s+/g, ' ')
   const category = detectMainCategory(fileName, content)
   const buckets = new Map<string, string[]>()
   const headings: string[] = []
-  for (const line of lines) {
-    if (/^#{1,6}\s/.test(line)) {
-      headings.push(line.replace(/^#{1,6}\s*/, '').replace(/[*_]/g, ''))
+  const polished: string[] = []
+  const seen = new Set<string>()
+  for (const rawLine of lines) {
+    const heading = extractHeading(rawLine)
+    if (heading) {
+      headings.push(heading)
       continue
     }
-    const categoryName = classifyLine(line)
-    const list = buckets.get(categoryName) ?? []
-    if (list.length < 14) list.push(line.replace(/^[-*]\s*/, ''))
-    buckets.set(categoryName, list)
+    for (const unit of splitLogicalUnits(rawLine)) {
+      const clean = polishLine(unit)
+      if (!clean || clean.length < 2 || seen.has(clean)) continue
+      seen.add(clean)
+      polished.push(clean)
+      const categoryName = classifyLine(clean)
+      const list = buckets.get(categoryName) ?? []
+      if (list.length < 12) list.push(clean)
+      buckets.set(categoryName, list)
+    }
   }
   const categoryOrder = [
     '流程与步骤',
@@ -207,15 +284,23 @@ function localStructuredContent(fileName: string, content: string): string {
     '角色与职责',
     '记录与台账',
     '文件与资料',
-    '其他内容',
+    '其他要点',
   ]
   const classified = categoryOrder
     .filter((name) => (buckets.get(name) ?? []).length > 0)
-    .map((name) => `#### ${name}\n${(buckets.get(name) ?? []).map((item) => `- ${item}`).join('\n')}`)
+    .map(
+      (name) =>
+        `#### ${name}\n${(buckets.get(name) ?? [])
+          .map((item) => `- ${item}`)
+          .join('\n')}`,
+    )
     .join('\n\n')
+  const compact = polished.join(' ').replace(/\s+/g, ' ')
+  const summary =
+    compact.length > 650 ? `${compact.slice(0, 650)}…` : compact
   const headingBlock =
     headings.length > 0
-      ? `### 章节识别\n\n${headings
+      ? `### 关键章节\n\n${headings
           .slice(0, 20)
           .map((item) => `- ${item}`)
           .join('\n')}`
@@ -227,13 +312,13 @@ function localStructuredContent(fileName: string, content: string): string {
     `- 来源附件：${fileName}`,
     `- 内容规模：${content.length} 字`,
     '',
-    '### 内容概要',
+    '### 内容概览',
     '',
-    `${compact.slice(0, 700)}${compact.length > 700 ? '…' : ''}`,
+    summary,
     '',
     headingBlock,
     headingBlock ? '' : null,
-    '### 细化分类',
+    '### 知识分类',
     '',
     classified,
   ]

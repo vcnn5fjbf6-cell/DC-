@@ -157,7 +157,7 @@ export function NoteEditor({
     if (!clean) return
     setDraft((current) => ({
       ...current,
-      body: `${current.body.trimEnd()}\n\n## 附件内容\n\n${clean}\n`,
+      body: clean,
     }))
     setSaveState('pending')
   }

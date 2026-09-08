@@ -93,6 +93,13 @@ function isNoiseLine(text: string): boolean {
   ) {
     return true
   }
+  if (
+    /^(以上为示例|以上内容为示例|模板说明|本文档为示例|该模板|仅供内部使用|仅限内部|请勿直接使用|请勿外传|如有疑问请咨询|以下内容仅供参考|打印于|生成于)/u.test(
+      text,
+    )
+  ) {
+    return true
+  }
   return false
 }
 
@@ -251,7 +258,7 @@ async function structureWithAi(
         {
           role: 'system',
           content:
-            '你是企业知识库结构化整理助手。只提取与文档主题直接相关的高价值信息，删除页眉页脚、水印、页码、模板说明、联系方式、通用套话和无意义内容。\n\n若文档本身是流程/工单/SOP，严格保留原编号与层级，输出格式如下，不要拆成知识分类：\n**文档标题**\n**1. 一级标题**\n- 操作要点\n**1.1 二级标题**\n- 操作要点\n\n若文档内容较散且没有层级，再使用精炼输出：\n### 内容重点\n- ...\n\n### 操作要点\n\n### 风险与注意事项\n\n保留关键数据和参数，不输出开场白。',
+            '你是企业知识库结构化整理助手。输出正文必须以文档标题开头：\n**文档标题**\n\n然后只保留流程/工单/SOP 自身的编号和要点：\n**1. 一级标题**\n- 操作要点\n**1.1 二级标题**\n- 操作要点\n\n删除页眉页脚、水印、页码、模板说明、联系方式、通用套话、文档元信息和无关内容。没有明确层级的信息不要展开，不要添加额外的分类说明。标题缺失时使用附件文件名作为文档标题。保留关键数据与参数，不输出开场白。',
         },
         {
           role: 'user',
@@ -368,13 +375,18 @@ function buildHierarchicalContent(content: string): string | null {
   const meaningful = lines.filter(
     (line) => !isNoiseLine(line) && line.length > 1,
   )
-  const first = meaningful[0] ?? ''
-  const title =
-    /操作流程|实施方案|作业指引|操作规范|作业流程|工作指引/u.test(first) &&
-    first.length < 60 &&
-    !/^\d/u.test(first)
-      ? first.replace(/^#+\s*/u, '')
-      : ''
+  const titleLine =
+    meaningful.find(
+      (line) =>
+        /操作流程|实施方案|作业指引|作业指导书|操作规范|作业流程|工作指引|工单|方案/u.test(
+          line,
+        ) &&
+        line.length < 70 &&
+        !/^\d/u.test(line),
+    ) ?? ''
+  const title = titleLine
+    ? titleLine.replace(/^\*{1,2}|\*{1,2}$/gu, '').replace(/^#+\s*/u, '').trim()
+    : ''
 
   const output: string[] = []
   if (title) output.push(`**${title.replace(/^\*{1,2}|\*{1,2}$/gu, '')}**`, '')
@@ -409,7 +421,7 @@ function buildHierarchicalContent(content: string): string | null {
     }
   }
 
-  return sectionCount >= 2 ? output.join('\n') : null
+  return sectionCount >= 1 && output.length > 2 ? output.join('\n') : null
 }
 
 function localStructuredContent(fileName: string, content: string): string {
@@ -476,26 +488,6 @@ function localStructuredContent(fileName: string, content: string): string {
       buckets.set(categoryName, list)
     }
   }
-  const categoryOrder = [
-    '流程与步骤',
-    '要求与标准',
-    '设备与参数',
-    '检查与巡检',
-    '故障与应急处置',
-    '风险与注意事项',
-    '角色与职责',
-    '记录与台账',
-    '文件与资料',
-  ]
-  const classified = categoryOrder
-    .filter((name) => (buckets.get(name) ?? []).length > 0)
-    .map(
-      (name) =>
-        `#### ${name}\n${(buckets.get(name) ?? [])
-          .map((item) => `- ${item}`)
-          .join('\n')}`,
-    )
-    .join('\n\n')
   const keyItems = [...polished]
     .sort(
       (a, b) =>
@@ -514,30 +506,10 @@ function localStructuredContent(fileName: string, content: string): string {
           .map((step, index) => `${index + 1}. ${step}`)
           .join('\n')}`
       : ''
-  const headingBlock =
-    headings.length > 0
-      ? `### 关键章节\n\n${headings
-          .slice(0, 20)
-          .map((item) => `- ${item}`)
-          .join('\n')}`
-      : ''
-  return [
-    '### 文档分类',
-    '',
-    `- 主分类：${category}`,
-    `- 来源附件：${fileName}`,
-    `- 内容规模：${content.length} 字`,
-    '',
-    keyBlock,
-    keyBlock ? '' : null,
-    stepBlock,
-    stepBlock ? '' : null,
-    headingBlock,
-    headingBlock ? '' : null,
-    classified ? `### 知识分类\n\n${classified}` : null,
-  ]
-    .filter((line): line is string => line !== null)
-    .join('\n')
+  const contentParts = [keyBlock, stepBlock].filter(Boolean)
+  if (contentParts.length === 0) return ''
+  const title = fileName.replace(/\.[^.]+$/, '')
+  return [`**${title}**`, '', contentParts.join('\n\n')].join('\n')
 }
 
 export async function generateStructuredAttachmentContent(

@@ -258,7 +258,7 @@ async function structureWithAi(
         {
           role: 'system',
           content:
-            '你是企业知识库结构化整理助手。输出正文必须以文档标题开头：\n**文档标题**\n\n然后只保留流程/工单/SOP 自身的编号和要点：\n**1. 一级标题**\n- 操作要点\n**1.1 二级标题**\n- 操作要点\n\n删除页眉页脚、水印、页码、模板说明、联系方式、通用套话、文档元信息和无关内容。没有明确层级的信息不要展开，不要添加额外的分类说明。标题缺失时使用附件文件名作为文档标题。保留关键数据与参数，不输出开场白。',
+            '你是企业知识库结构化整理助手。只输出文档标题和两个部分，其余内容一律不输出：\n**文档标题**\n\n### 操作步骤\n**1. 一级标题**\n- 操作内容\n**1.1 二级标题**\n- 操作内容\n\n### 备注\n- 备注、注意事项、避免事项、参照内容\n\n删除页眉页脚、水印、页码、模板说明、联系方式、元信息、要求、完成标准和无关内容。没有操作步骤或备注的分节不要输出，不输出开场白。',
         },
         {
           role: 'user',
@@ -365,6 +365,17 @@ function isStepSectionHeading(line: string): boolean {
   )
 }
 
+function isRemarkContent(line: string): boolean {
+  const plain = polishLine(line).toLowerCase()
+  return (
+    /^(备注|注|注意|说明|风险|警示|重要提示|注意事项|避免|防止|严禁|禁止|参照.*checklist|如不满足|请务必)/u.test(
+      plain,
+    ) ||
+    /(备注|注意事项|避免|防止|严禁|禁止|风险提示|重要提示)/u.test(plain) &&
+      plain.length < 120
+  )
+}
+
 function buildHierarchicalContent(content: string): string | null {
   const lines = content
     .split(/\r?\n/)
@@ -388,9 +399,8 @@ function buildHierarchicalContent(content: string): string | null {
     ? titleLine.replace(/^\*{1,2}|\*{1,2}$/gu, '').replace(/^#+\s*/u, '').trim()
     : ''
 
-  const output: string[] = []
-  if (title) output.push(`**${title.replace(/^\*{1,2}|\*{1,2}$/gu, '')}**`, '')
-
+  const stepLines: string[] = []
+  const remarkLines: string[] = []
   let sectionCount = 0
   for (let index = 0; index < meaningful.length; index += 1) {
     const line = meaningful[index]
@@ -404,24 +414,34 @@ function buildHierarchicalContent(content: string): string | null {
     const nextIsBullet = /^[-•*·]\s+/u.test(next)
 
     if (numeric && (looksBoldHeading || nextIsBullet || nextLooksSubHeading)) {
-      output.push(`**${plain}**`)
+      stepLines.push(`**${plain}**`)
       sectionCount += 1
       continue
     }
     if (isBullet) {
-      output.push(line)
+      if (isRemarkContent(line)) remarkLines.push(line)
+      else stepLines.push(line)
       continue
     }
     if (looksBoldHeading && !numeric) {
-      output.push(line)
+      if (isRemarkContent(line)) remarkLines.push(`- ${plain}`)
+      else stepLines.push(line)
       continue
     }
-    if (sectionCount > 0 && line.length > 2) {
-      output.push(line)
+    if (sectionCount > 0 && isRemarkContent(line)) {
+      remarkLines.push(`- ${plain}`)
+      continue
     }
   }
 
-  return sectionCount >= 1 && output.length > 2 ? output.join('\n') : null
+  if (sectionCount < 1 || stepLines.length < 2) return null
+  const output: string[] = []
+  if (title) output.push(`**${title}**`, '')
+  output.push('### 操作步骤', '', ...stepLines)
+  if (remarkLines.length > 0) {
+    output.push('', '### 备注', '', ...remarkLines)
+  }
+  return output.join('\n')
 }
 
 function localStructuredContent(fileName: string, content: string): string {
@@ -488,17 +508,6 @@ function localStructuredContent(fileName: string, content: string): string {
       buckets.set(categoryName, list)
     }
   }
-  const keyItems = [...polished]
-    .sort(
-      (a, b) =>
-        relevanceScore(b, classifyLine(b), category) -
-        relevanceScore(a, classifyLine(a), category),
-    )
-    .slice(0, 12)
-  const keyBlock =
-    keyItems.length > 0
-      ? `### 重点要点\n\n${keyItems.map((item) => `- ${item}`).join('\n')}`
-      : ''
   const stepBlock =
     operationSteps.length > 0
       ? `### 操作步骤\n\n${operationSteps
@@ -506,7 +515,12 @@ function localStructuredContent(fileName: string, content: string): string {
           .map((step, index) => `${index + 1}. ${step}`)
           .join('\n')}`
       : ''
-  const contentParts = [keyBlock, stepBlock].filter(Boolean)
+  const remarkItems = polished.filter((item) => isRemarkContent(item)).slice(0, 30)
+  const remarkBlock =
+    remarkItems.length > 0
+      ? `### 备注\n\n${remarkItems.map((item) => `- ${item}`).join('\n')}`
+      : ''
+  const contentParts = [stepBlock, remarkBlock].filter(Boolean)
   if (contentParts.length === 0) return ''
   const title = fileName.replace(/\.[^.]+$/, '')
   return [`**${title}**`, '', contentParts.join('\n\n')].join('\n')

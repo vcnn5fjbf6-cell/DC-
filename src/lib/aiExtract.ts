@@ -202,7 +202,7 @@ async function structureWithAi(
         {
           role: 'system',
           content:
-            '你是企业知识库结构化整理助手。请先识别附件的主分类，再把内容细化为可直接放入知识条目的 Markdown 正文。必须使用以下结构：\n### 文档分类\n- 主分类：\n- 细分分类：\n- 适用场景：\n- 来源附件：\n\n### 内容概要\n\n### 分类要点\n#### 流程与步骤\n#### 要求与标准\n#### 设备与参数\n#### 巡检与记录\n#### 风险与注意事项\n#### 故障与应急处置\n#### 角色与职责\n（没有对应内容的分类不要输出）\n\n### 补充信息\n保留所有关键数据、步骤、参数和清单，不使用一级标题，不输出开场白。',
+            '你是企业知识库结构化整理助手。先识别附件是否包含操作流程或作业步骤。若包含，必须严格按照文档顺序输出：\n### 操作步骤\n1. 操作动作与对象\n2. 操作动作与对象\n...\n\n然后继续输出：\n### 文档分类\n- 主分类：\n- 细分分类：\n- 来源附件：\n\n### 前置条件\n\n### 操作要点\n\n### 风险与注意事项\n\n### 完成标准\n\n保留关键数据、参数和清单，不使用一级标题，不输出开场白。没有对应内容的分节不要输出。',
         },
         {
           role: 'user',
@@ -240,11 +240,73 @@ function polishLine(text: string): string {
 function extractHeading(line: string): string | null {
   const clean = line.replace(/^#{1,6}\s*/, '').replace(/[*_]/g, '').trim()
   if (clean.length > 90) return null
+  if (
+    clean.length > 30 &&
+    !/^(第\s*[一二三四五六七八九十百\d]+\s*[章节篇部分]|附录|附件)/u.test(
+      clean,
+    )
+  ) {
+    return null
+  }
   const headingPattern =
     /^(第\s*[一二三四五六七八九十百\d]+\s*[章节篇部分]|附录|附件|目的|适用范围|职责|流程|步骤|操作|要求|标准|检查|巡检|记录|应急|风险|注意|数据|参数|清单|制度|规范)/u
   const numberedPattern = /^([一二三四五六七八九十]+[、.．]|\d+\s*[.、．])\s*\S/u
   if (headingPattern.test(clean) || numberedPattern.test(clean)) return clean
   return null
+}
+
+function parseStepCandidate(line: string): string | null {
+  if (line.includes('\t')) {
+    const cells = line
+      .split('\t')
+      .map((cell) => cell.trim())
+      .filter(Boolean)
+    if (cells.length > 1) {
+      const first = cells[0]
+      if (/^(序号|步骤|操作|动作|流程|负责人|时间|备注|操作内容)$/i.test(first)) {
+        return null
+      }
+      if (/^[一二三四五六七八九十\d]+$/.test(first)) {
+        const action = cells
+          .slice(1)
+          .find((cell) => !/^(负责人|时间|备注)$/.test(cell) && cell.length > 1)
+        if (action) return action
+      }
+      const body = cells.join('；')
+      if (/步骤|操作|执行|检查|确认|登记/.test(body) && first.length <= 8) {
+        return body
+      }
+    }
+    return null
+  }
+  const text = line.trim()
+  const explicit = text.match(
+    /^(?:第\s*[一二三四五六七八九十百\d]+\s*步|步骤\s*[一二三四五六七八九十百\d]+|step\s*\d+)\s*[:：、.\-]?\s*(.+)$/i,
+  )
+  if (explicit) return explicit[1]
+  const numbered = text.match(/^([一二三四五六七八九十]|\d+)\s*[、.．)]\s*(.+)$/u)
+  if (numbered) {
+    const body = numbered[2]
+    if (
+      /^(目的|适用范围|职责|概述|简介|定义|要求|标准|风险|注意|记录|清单|制度|规范|章节|操作步骤)/u.test(
+        body,
+      )
+    ) {
+      return null
+    }
+    return body
+  }
+  return null
+}
+
+function isStepSectionHeading(line: string): boolean {
+  const text = line.trim()
+  return (
+    text.length < 26 &&
+    /^(操作步骤|作业步骤|实施步骤|流程步骤|操作流程|具体操作|操作说明|操作规范|交付步骤|实施流程)/u.test(
+      text,
+    )
+  )
 }
 
 function localStructuredContent(fileName: string, content: string): string {
@@ -257,8 +319,39 @@ function localStructuredContent(fileName: string, content: string): string {
   const headings: string[] = []
   const polished: string[] = []
   const seen = new Set<string>()
+  const operationSteps: string[] = []
+  let inOperationSection = false
   for (const rawLine of lines) {
+    const stepHeading = isStepSectionHeading(rawLine)
+    if (stepHeading) {
+      inOperationSection = true
+      continue
+    }
     const heading = extractHeading(rawLine)
+    const stepCandidate = parseStepCandidate(rawLine)
+    if (inOperationSection && heading && !stepCandidate) {
+      inOperationSection = false
+    }
+    if (inOperationSection && !stepCandidate) {
+      const clean = polishLine(rawLine)
+      if (
+        clean &&
+        clean.length > 2 &&
+        /检查|确认|打开|关闭|登录|填写|点击|连接|配置|上传|提交|登记|联系|处置|复核|验收|开始|完成|启动|停止|断电|通电|联系|上报/u.test(
+          clean,
+        ) &&
+        operationSteps.length < 40
+      ) {
+        operationSteps.push(clean)
+      }
+      continue
+    }
+    if (stepCandidate) {
+      if (operationSteps.length < 40) {
+        operationSteps.push(polishLine(stepCandidate))
+      }
+      continue
+    }
     if (heading) {
       headings.push(heading)
       continue
@@ -298,6 +391,13 @@ function localStructuredContent(fileName: string, content: string): string {
   const compact = polished.join(' ').replace(/\s+/g, ' ')
   const summary =
     compact.length > 650 ? `${compact.slice(0, 650)}…` : compact
+  const stepBlock =
+    operationSteps.length > 0
+      ? `### 操作步骤\n\n${operationSteps
+          .slice(0, 30)
+          .map((step, index) => `${index + 1}. ${step}`)
+          .join('\n')}`
+      : ''
   const headingBlock =
     headings.length > 0
       ? `### 关键章节\n\n${headings
@@ -316,6 +416,8 @@ function localStructuredContent(fileName: string, content: string): string {
     '',
     summary,
     '',
+    stepBlock,
+    stepBlock ? '' : null,
     headingBlock,
     headingBlock ? '' : null,
     '### 知识分类',

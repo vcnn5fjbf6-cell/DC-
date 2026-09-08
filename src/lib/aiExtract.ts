@@ -76,6 +76,55 @@ function classifyLine(line: string): string {
   return '其他内容'
 }
 
+function isNoiseLine(text: string): boolean {
+  if (text.length < 6) return true
+  if (
+    /^(第\s*\d+\s*页|page\s*\d+|www\.|https?:\/\/|©|copyright|版权所有|机密|内部资料|仅限内部|仅供参考|打印于|生成于|创建时间|更新时间)/iu.test(
+      text,
+    )
+  ) {
+    return true
+  }
+  if (
+    /^(编号|版本|密级|编制人|审核人|批准人|文件号|联系电话|联系人)\s*[：:]/u.test(
+      text,
+    ) &&
+    !/流程|规范|制度|步骤/u.test(text)
+  ) {
+    return true
+  }
+  return false
+}
+
+function relevanceScore(
+  line: string,
+  category: string,
+  mainCategory: string,
+): number {
+  let score = 0
+  if (
+    /必须|禁止|不得|要求|标准|验收|确认|检查|巡检|记录|流程|步骤|操作|参数|故障|风险|告警|异常|温度|湿度|电压|UPS|空调|负责人|值班|登记|上报|处置|配置|安装|上架|归档/u.test(
+      line,
+    )
+  ) {
+    score += 3
+  }
+  if (/\d+(\.\d+)?\s*(%|℃|度|V|A|W|Hz|小时|天|周|月)/u.test(line)) {
+    score += 1
+  }
+  if (/\d+/u.test(line)) score += 1
+  if (/模板|套话|举例说明|如有疑问|请咨询|咨询电话/u.test(line)) score -= 2
+  if (category === '其他内容') score -= 2
+  if (
+    category === mainCategory ||
+    (mainCategory === '设施与运维' &&
+      /检查|巡检|参数|设备|故障|告警|UPS|空调|配电/u.test(line))
+  ) {
+    score += 1
+  }
+  return score
+}
+
 function splitSemanticUnit(text: string): string[] {
   if (text.length <= 36) return [text]
   const boundaries = [
@@ -202,7 +251,7 @@ async function structureWithAi(
         {
           role: 'system',
           content:
-            '你是企业知识库结构化整理助手。先识别附件是否包含操作流程或作业步骤。若包含，必须严格按照文档顺序输出：\n### 操作步骤\n1. 操作动作与对象\n2. 操作动作与对象\n...\n\n然后继续输出：\n### 文档分类\n- 主分类：\n- 细分分类：\n- 来源附件：\n\n### 前置条件\n\n### 操作要点\n\n### 风险与注意事项\n\n### 完成标准\n\n保留关键数据、参数和清单，不使用一级标题，不输出开场白。没有对应内容的分节不要输出。',
+            '你是企业知识库结构化整理助手。只提取与文档主题直接相关的高价值信息，删除页眉页脚、水印、页码、模板说明、联系方式、通用套话和无意义内容，不复制原文。若包含操作流程，必须按文档顺序输出：\n### 操作步骤\n1. 操作动作与对象\n2. 操作动作与对象\n...\n\n然后输出精炼要点：\n### 内容重点\n- 只保留可直接使用或检索的重点\n\n### 前置条件\n\n### 操作要点\n\n### 风险与注意事项\n\n### 完成标准\n\n保留关键数据和参数，不使用一级标题，不输出开场白，没有对应内容的分节不要输出。',
         },
         {
           role: 'user',
@@ -359,9 +408,12 @@ function localStructuredContent(fileName: string, content: string): string {
     for (const unit of splitLogicalUnits(rawLine)) {
       const clean = polishLine(unit)
       if (!clean || clean.length < 2 || seen.has(clean)) continue
+      if (isNoiseLine(clean)) continue
+      const categoryName = classifyLine(clean)
+      const score = relevanceScore(clean, categoryName, category)
+      if (score < 2) continue
       seen.add(clean)
       polished.push(clean)
-      const categoryName = classifyLine(clean)
       const list = buckets.get(categoryName) ?? []
       if (list.length < 12) list.push(clean)
       buckets.set(categoryName, list)
@@ -377,7 +429,6 @@ function localStructuredContent(fileName: string, content: string): string {
     '角色与职责',
     '记录与台账',
     '文件与资料',
-    '其他要点',
   ]
   const classified = categoryOrder
     .filter((name) => (buckets.get(name) ?? []).length > 0)
@@ -388,9 +439,17 @@ function localStructuredContent(fileName: string, content: string): string {
           .join('\n')}`,
     )
     .join('\n\n')
-  const compact = polished.join(' ').replace(/\s+/g, ' ')
-  const summary =
-    compact.length > 650 ? `${compact.slice(0, 650)}…` : compact
+  const keyItems = [...polished]
+    .sort(
+      (a, b) =>
+        relevanceScore(b, classifyLine(b), category) -
+        relevanceScore(a, classifyLine(a), category),
+    )
+    .slice(0, 12)
+  const keyBlock =
+    keyItems.length > 0
+      ? `### 重点要点\n\n${keyItems.map((item) => `- ${item}`).join('\n')}`
+      : ''
   const stepBlock =
     operationSteps.length > 0
       ? `### 操作步骤\n\n${operationSteps
@@ -412,17 +471,13 @@ function localStructuredContent(fileName: string, content: string): string {
     `- 来源附件：${fileName}`,
     `- 内容规模：${content.length} 字`,
     '',
-    '### 内容概览',
-    '',
-    summary,
-    '',
+    keyBlock,
+    keyBlock ? '' : null,
     stepBlock,
     stepBlock ? '' : null,
     headingBlock,
     headingBlock ? '' : null,
-    '### 知识分类',
-    '',
-    classified,
+    classified ? `### 知识分类\n\n${classified}` : null,
   ]
     .filter((line): line is string => line !== null)
     .join('\n')

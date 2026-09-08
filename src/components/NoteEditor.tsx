@@ -133,7 +133,9 @@ export function NoteEditor({
         ),
     [allNotes, note.id],
   )
-  const isLanding = childNotes.length > 0
+  const isLanding =
+    childNotes.length > 0 || note.parentId === 'seed-machine-room'
+  const landingKind = note.parentId ? '三级条目' : '子知识库'
   const childEntryCounts = useMemo(() => {
     const counts = new Map<string, number>()
     for (const child of childNotes) {
@@ -224,7 +226,7 @@ export function NoteEditor({
             onClick={onCreate}
           >
             <FilePlus2 size={16} />
-            {isLanding && !note.parentId ? '新建知识库' : '新建条目'}
+            {isLanding ? `新建${landingKind}` : '新建条目'}
           </button>
           {!isLanding && (
             <>
@@ -274,7 +276,7 @@ export function NoteEditor({
                 </span>
                 <div>
                   <p>{landingTitle}</p>
-                  <h1>子知识库</h1>
+                  <h1>{landingKind}</h1>
                 </div>
               </header>
 
@@ -306,8 +308,8 @@ export function NoteEditor({
                     <Plus size={17} />
                   </span>
                   <div>
-                    <strong>新建子知识库</strong>
-                    <small>新的机房运维分类</small>
+                    <strong>新建{landingKind}</strong>
+                    <small>{note.parentId ? '新的三级条目' : '新的机房运维分类'}</small>
                   </div>
                 </div>
                 <div className="kb-create-form">
@@ -329,7 +331,7 @@ export function NoteEditor({
                     onClick={addChild}
                   >
                     <Plus size={16} />
-                    创建知识库
+                    创建{landingKind}
                   </button>
                 </div>
               </section>

@@ -251,7 +251,7 @@ async function structureWithAi(
         {
           role: 'system',
           content:
-            '你是企业知识库结构化整理助手。只提取与文档主题直接相关的高价值信息，删除页眉页脚、水印、页码、模板说明、联系方式、通用套话和无意义内容，不复制原文。若包含操作流程，必须按文档顺序输出：\n### 操作步骤\n1. 操作动作与对象\n2. 操作动作与对象\n...\n\n然后输出精炼要点：\n### 内容重点\n- 只保留可直接使用或检索的重点\n\n### 前置条件\n\n### 操作要点\n\n### 风险与注意事项\n\n### 完成标准\n\n保留关键数据和参数，不使用一级标题，不输出开场白，没有对应内容的分节不要输出。',
+            '你是企业知识库结构化整理助手。只提取与文档主题直接相关的高价值信息，删除页眉页脚、水印、页码、模板说明、联系方式、通用套话和无意义内容。\n\n若文档本身是流程/工单/SOP，严格保留原编号与层级，输出格式如下，不要拆成知识分类：\n**文档标题**\n**1. 一级标题**\n- 操作要点\n**1.1 二级标题**\n- 操作要点\n\n若文档内容较散且没有层级，再使用精炼输出：\n### 内容重点\n- ...\n\n### 操作要点\n\n### 风险与注意事项\n\n保留关键数据和参数，不输出开场白。',
         },
         {
           role: 'user',
@@ -358,7 +358,64 @@ function isStepSectionHeading(line: string): boolean {
   )
 }
 
+function buildHierarchicalContent(content: string): string | null {
+  const lines = content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+  if (lines.length === 0) return null
+
+  const meaningful = lines.filter(
+    (line) => !isNoiseLine(line) && line.length > 1,
+  )
+  const first = meaningful[0] ?? ''
+  const title =
+    /操作流程|实施方案|作业指引|操作规范|作业流程|工作指引/u.test(first) &&
+    first.length < 60 &&
+    !/^\d/u.test(first)
+      ? first.replace(/^#+\s*/u, '')
+      : ''
+
+  const output: string[] = []
+  if (title) output.push(`**${title.replace(/^\*{1,2}|\*{1,2}$/gu, '')}**`, '')
+
+  let sectionCount = 0
+  for (let index = 0; index < meaningful.length; index += 1) {
+    const line = meaningful[index]
+    const plain = line.replace(/^\*{1,2}|\*{1,2}$/gu, '').replace(/#+\s*/u, '').trim()
+    const next = meaningful[index + 1] ?? ''
+    const isBullet = /^[-•*·]\s+/u.test(line)
+    const numeric = plain.match(/^(\d+(?:\.\d+)*)\s*[.、．]\s*(.+)$/u)
+    const looksBoldHeading = /^\*\*.+\*\*$/u.test(line) && plain.length < 60
+    const nextLooksSubHeading =
+      numeric && /^\d+\.\d+(\s+|\s*[.、．]\s*)\S/u.test(next)
+    const nextIsBullet = /^[-•*·]\s+/u.test(next)
+
+    if (numeric && (looksBoldHeading || nextIsBullet || nextLooksSubHeading)) {
+      output.push(`**${plain}**`)
+      sectionCount += 1
+      continue
+    }
+    if (isBullet) {
+      output.push(line)
+      continue
+    }
+    if (looksBoldHeading && !numeric) {
+      output.push(line)
+      continue
+    }
+    if (sectionCount > 0 && line.length > 2) {
+      output.push(line)
+    }
+  }
+
+  return sectionCount >= 2 ? output.join('\n') : null
+}
+
 function localStructuredContent(fileName: string, content: string): string {
+  const hierarchical = buildHierarchicalContent(content)
+  if (hierarchical) return hierarchical
+
   const lines = content
     .split(/\r?\n/)
     .map((line) => line.trim())

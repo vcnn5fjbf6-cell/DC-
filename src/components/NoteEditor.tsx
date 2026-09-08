@@ -133,8 +133,7 @@ export function NoteEditor({
         ),
     [allNotes, note.id],
   )
-  const isLanding =
-    childNotes.length > 0 || note.parentId === 'seed-machine-room'
+  const isLanding = !note.parentId && childNotes.length > 0
   const landingKind = note.parentId ? '三级条目' : '子知识库'
   const childEntryCounts = useMemo(() => {
     const counts = new Map<string, number>()
@@ -226,7 +225,7 @@ export function NoteEditor({
             onClick={onCreate}
           >
             <FilePlus2 size={16} />
-            {isLanding ? `新建${landingKind}` : '新建条目'}
+            新建条目
           </button>
           {!isLanding && (
             <>

@@ -35,7 +35,7 @@ function NoteTree({
   level: number
 }) {
   const children = notes.filter((note) => note.parentId === parentId)
-  if (children.length === 0 || level > 4) return null
+  if (children.length === 0 || level > 1) return null
   return (
     <div className="side-child-list">
       {children.map((child) => (

@@ -209,9 +209,7 @@ export default function App() {
         onDelete={() => deleteNote(activeNote.id)}
         onOpen={openNote}
         onCreateChild={createChildNote}
-        onCreate={() => {
-          if (activeNote) createNote('internal', undefined, activeNote.id)
-        }}
+        onCreate={() => createNote()}
       />
     )
   } else {

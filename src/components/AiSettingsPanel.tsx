@@ -24,7 +24,7 @@ export function AiSettingsPanel() {
         </span>
         <div>
           <h2>AI 智能读取</h2>
-          <p>配置 OpenAI 兼容接口后，上传附件会自动生成 Markdown 正文。</p>
+          <p>已启用本机 Codex 真实模型，无需 API Key 即可自动生成内容。</p>
         </div>
         <WandSparkles className="ai-title-spark" size={20} />
       </div>
@@ -41,7 +41,7 @@ export function AiSettingsPanel() {
               }))
             }
           />
-          <span>启用 AI 正文生成</span>
+          <span>启用备用云端 AI</span>
         </label>
       </div>
 

@@ -532,6 +532,27 @@ export async function generateStructuredAttachmentContent(
 ): Promise<{ text: string; source: 'ai' | 'local' | 'none' }> {
   const clean = content.trim()
   if (!clean) return { text: '', source: 'none' }
+
+  try {
+    const controller = new AbortController()
+    const timer = window.setTimeout(() => controller.abort(), 180000)
+    const response = await fetch('http://127.0.0.1:5188/extract', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName, content: clean.slice(0, 18000) }),
+      signal: controller.signal,
+    })
+    window.clearTimeout(timer)
+    if (response.ok) {
+      const result = (await response.json()) as { text?: string }
+      if (result.text?.trim()) {
+        return { text: result.text.trim(), source: 'ai' }
+      }
+    }
+  } catch {
+    // The local Codex service may be offline; fall back to alternate providers.
+  }
+
   const settings = loadAiSettings()
   if (settings.enabled && settings.apiKey.trim()) {
     try {
@@ -541,5 +562,6 @@ export async function generateStructuredAttachmentContent(
       // Fall back to local extraction when the AI endpoint is unavailable.
     }
   }
-  return { text: localStructuredContent(fileName, clean), source: 'local' }
+  const local = localStructuredContent(fileName, clean)
+  return { text: local, source: local ? 'local' : 'none' }
 }

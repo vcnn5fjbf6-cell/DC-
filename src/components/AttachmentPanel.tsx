@@ -10,7 +10,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject } from 'react'
 import type { AttachmentMeta } from '../types'
 import {
   deleteAttachmentFile,
@@ -96,9 +96,11 @@ function formatSize(size: number): string {
 export function AttachmentPanel({
   noteId,
   onContentGenerated,
+  uploadRef,
 }: {
   noteId: string
   onContentGenerated?: (text: string) => void
+  uploadRef?: MutableRefObject<{ open: () => void } | null>
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [metas, setMetas] = useState<AttachmentMeta[]>([])
@@ -107,6 +109,14 @@ export function AttachmentPanel({
   const [uploading, setUploading] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (uploadRef) {
+      uploadRef.current = {
+        open: () => inputRef.current?.click(),
+      }
+    }
+  })
 
   useEffect(() => {
     let cancelled = false

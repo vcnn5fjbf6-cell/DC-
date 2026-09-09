@@ -220,7 +220,6 @@ export default function App() {
             notes={renderedImports}
             onOpen={openNote}
             onCreate={createNote}
-            onOpenDomain={openNote}
           />
         )
         break

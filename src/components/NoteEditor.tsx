@@ -9,13 +9,14 @@ import {
   Eye,
   FilePlus2,
   Link2,
+  Paperclip,
   PencilLine,
   Plus,
   Save,
   Trash2,
   Unlink,
 } from 'lucide-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Note, NoteStatus } from '../types'
 import { domains } from '../data/domains'
 import { renderMarkdown } from '../lib/markdown'
@@ -62,6 +63,7 @@ export function NoteEditor({
   )
   const [tagInput, setTagInput] = useState('')
   const [childTitle, setChildTitle] = useState('')
+  const uploadRef = useRef<{ open: () => void } | null>(null)
 
   const editableFieldsEqual = (
     a: Note,
@@ -227,6 +229,17 @@ export function NoteEditor({
             <FilePlus2 size={16} />
             新建条目
           </button>
+          {!isLanding && (
+            <button
+              type="button"
+              className="btn editor-upload-btn"
+              onClick={() => uploadRef.current?.open()}
+              title="上传附件并智能整理"
+            >
+              <Paperclip size={16} />
+              上传附件
+            </button>
+          )}
           {!isLanding && (
             <>
               <span
@@ -394,6 +407,12 @@ export function NoteEditor({
 
         {!isLanding && (
           <aside className="editor-meta">
+          <AttachmentPanel
+            noteId={note.id}
+            onContentGenerated={applyAiContent}
+            uploadRef={uploadRef}
+          />
+
           <section className="meta-block">
             <h3>归属</h3>
             <label>
@@ -475,11 +494,6 @@ export function NoteEditor({
               </div>
             </div>
           </section>
-
-          <AttachmentPanel
-            noteId={note.id}
-            onContentGenerated={applyAiContent}
-          />
 
           <section className="meta-block links-block">
             <h3>

@@ -7,13 +7,11 @@ import { clearAttachmentFiles, deleteAttachmentsForNote } from './lib/fileStore'
 import type { DomainId, Note } from './types'
 import { nowIso, uid } from './lib/notes'
 import { CommandSearch } from './components/CommandSearch'
-import { GraphPage } from './components/GraphPage'
 import { Home } from './components/Home'
 import { NoteEditor } from './components/NoteEditor'
 import { NotesList } from './components/NotesList'
 import { SettingsPage } from './components/SettingsPage'
 import { Sidebar, type ViewId } from './components/Sidebar'
-import { TreePage } from './components/TreePage'
 
 const STORAGE_KEY = 'allknow-notes-v1'
 const REMOVED_SEED_NOTES = new Set([
@@ -223,25 +221,6 @@ export default function App() {
           />
         )
         break
-      case 'tree':
-        content = (
-          <TreePage
-            notes={renderedImports}
-            onOpen={openNote}
-            onOpenDomain={openNote}
-            onCreate={() => createNote()}
-          />
-        )
-        break
-      case 'graph':
-        content = (
-          <GraphPage
-            notes={renderedImports}
-            onOpen={openNote}
-            onCreate={() => createNote()}
-          />
-        )
-        break
       case 'notes':
         content = (
           <NotesList
@@ -277,8 +256,6 @@ export default function App() {
         onNavigate={navigate}
         onSearch={() => setSearchOpen(true)}
         noteCount={renderedImports.length}
-        onOpenNote={openNote}
-        notes={renderedImports}
       />
       <main className="app-main">{content}</main>
       {view !== 'note' && (

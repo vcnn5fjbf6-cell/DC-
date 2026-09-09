@@ -39,10 +39,14 @@ export function NotesList({
   const [status, setStatus] = useState<NoteStatus | 'all'>('all')
   const [tag, setTag] = useState('all')
   const [sort, setSort] = useState('updated')
+  const userDocuments = useMemo(
+    () => notes.filter((note) => !note.id.startsWith('seed-')),
+    [notes],
+  )
 
   const filtered = useMemo(() => {
     const lower = query.trim().toLocaleLowerCase()
-    const result = notes.filter((note) => {
+    const result = userDocuments.filter((note) => {
       if (domain !== 'all' && note.domain !== domain) return false
       if (status !== 'all' && note.status !== status) return false
       if (tag !== 'all' && !note.tags.includes(tag)) return false
@@ -62,15 +66,15 @@ export function NotesList({
       return result.sort((a, b) => a.title.localeCompare(b.title, 'zh-CN'))
     }
     return sortByUpdated(result)
-  }, [notes, query, domain, status, tag, sort])
+  }, [userDocuments, query, domain, status, tag, sort])
 
   return (
     <div className="page notes-page">
       <header className="page-heading">
         <div>
-          <h1>全部条目</h1>
+          <h1>文档库</h1>
           <p className="heading-sub">
-            筛选 {filtered.length} 条结果 · 所有领域均以同一结构沉淀
+            这里只展示你实际新建的文档，不包含预置知识库条目。
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => onCreate()}>

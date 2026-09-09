@@ -67,8 +67,8 @@ export function buildSeedNotes(): Note[] {
 
 ## 子知识库
 
-- [[交付相关知识库]]
-- [[设施相关知识库]]
+- [[交付相关文档库]]
+- [[设施相关文档库]]
 
 ## 延伸方向
 
@@ -82,10 +82,10 @@ export function buildSeedNotes(): Note[] {
     ),
     createNote(
       'seed-machine-delivery',
-      '交付相关知识库',
-      `# 交付相关知识库
+      '交付相关文档库',
+      `# 交付相关文档库
 
-交付相关知识库保存机房相关项目与设备的交付资料。
+交付相关文档库保存机房相关项目与设备的交付资料。
 
 ## 常用内容
 
@@ -102,10 +102,10 @@ export function buildSeedNotes(): Note[] {
     ),
     createNote(
       'seed-machine-facility',
-      '设施相关知识库',
-      `# 设施相关知识库
+      '设施相关文档库',
+      `# 设施相关文档库
 
-设施相关知识库保存机房的供电、制冷、安防和消防等设施资料。
+设施相关文档库保存机房的供电、制冷、安防和消防等设施资料。
 
 ## 常用内容
 

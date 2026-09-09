@@ -31,13 +31,37 @@ function belongsToInternalDomain(note: Note): boolean {
   return note.domain === 'internal' && !REMOVED_SEED_NOTES.has(note.id)
 }
 
+const RENAMED_LIBRARIES = new Map([
+  ['seed-machine-delivery', '交付相关文档库'],
+  ['seed-machine-facility', '设施相关文档库'],
+])
+const RENAME_PAIRS = [
+  ['交付相关知识库', '交付相关文档库'],
+  ['设施相关知识库', '设施相关文档库'],
+] as const
+
+function migrateLibraryNames(note: Note): Note {
+  const renamedTitle = RENAMED_LIBRARIES.get(note.id)
+  let body = note.body
+  for (const [oldName, newName] of RENAME_PAIRS) {
+    body = body.replaceAll(`[[${oldName}]]`, `[[${newName}]]`)
+  }
+  return {
+    ...note,
+    title: renamedTitle ?? note.title,
+    body,
+  }
+}
+
 function readStoredNotes(): Note[] {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY)
     if (!raw) return buildSeedNotes()
     const parsed = JSON.parse(raw) as Note[]
     if (!Array.isArray(parsed)) return buildSeedNotes()
-    const valid = parsed.filter(belongsToInternalDomain)
+    const valid = parsed
+      .filter(belongsToInternalDomain)
+      .map(migrateLibraryNames)
     const seeds = buildSeedNotes()
     const byId = new Set(valid.map((note) => note.id))
     return [...valid, ...seeds.filter((note) => !byId.has(note.id))]
@@ -256,6 +280,8 @@ export default function App() {
         onNavigate={navigate}
         onSearch={() => setSearchOpen(true)}
         noteCount={renderedImports.length}
+        notes={renderedImports}
+        onOpenNote={openNote}
       />
       <main className="app-main">{content}</main>
       {view !== 'note' && (

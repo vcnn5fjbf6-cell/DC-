@@ -5,6 +5,8 @@ import {
   Search,
   Sparkles,
 } from 'lucide-react'
+import { Fragment } from 'react'
+import type { Note } from '../types'
 
 export type ViewId = 'home' | 'notes' | 'settings'
 
@@ -23,11 +25,15 @@ export function Sidebar({
   onNavigate,
   onSearch,
   noteCount,
+  notes,
+  onOpenNote,
 }: {
   view: ViewId
   onNavigate: (view: ViewId) => void
   onSearch: () => void
   noteCount: number
+  notes: Note[]
+  onOpenNote: (id: string) => void
 }) {
   return (
     <>
@@ -53,16 +59,39 @@ export function Sidebar({
           {primaryItems.map((item) => {
             const Icon = item.icon
             return (
-              <button
-                key={item.id}
-                type="button"
-                className={view === item.id ? 'is-active' : ''}
-                onClick={() => onNavigate(item.id)}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-                {item.id === 'notes' && <em>{noteCount}</em>}
-              </button>
+              <Fragment key={item.id}>
+                <button
+                  type="button"
+                  className={view === item.id ? 'is-active' : ''}
+                  onClick={() => onNavigate(item.id)}
+                >
+                  <Icon size={18} />
+                  <span>{item.label}</span>
+                  {item.id === 'notes' && <em>{noteCount}</em>}
+                </button>
+                {item.id === 'notes' && (
+                  <div className="side-child-list side-library-shortcuts">
+                    {notes
+                      .filter(
+                        (note) =>
+                          note.parentId === 'seed-machine-room' &&
+                          (note.id === 'seed-machine-delivery' ||
+                            note.id === 'seed-machine-facility'),
+                      )
+                      .map((note) => (
+                        <button
+                          key={note.id}
+                          type="button"
+                          onClick={() => onOpenNote(note.id)}
+                          title={note.title}
+                        >
+                          <span className="branch-bullet is-child" />
+                          <span>{note.title}</span>
+                        </button>
+                      ))}
+                  </div>
+                )}
+              </Fragment>
             )
           })}
         </nav>

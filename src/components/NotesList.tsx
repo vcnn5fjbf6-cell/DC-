@@ -17,6 +17,21 @@ import {
 } from '../lib/notes'
 import { DomainIcon, EmptyState, StatusPill, TagChip } from './ui'
 
+function countDescendantNotes(notes: Note[], parentId: string): number {
+  const visited = new Set<string>([parentId])
+  let count = 0
+  const visit = (currentId: string) => {
+    for (const child of notes.filter((note) => note.parentId === currentId)) {
+      if (visited.has(child.id)) continue
+      visited.add(child.id)
+      count += 1
+      visit(child.id)
+    }
+  }
+  visit(parentId)
+  return count
+}
+
 const sortOptions = [
   { id: 'updated', label: '最近更新' },
   { id: 'created', label: '最近创建' },
@@ -65,7 +80,7 @@ export function NotesList({
     for (const library of secondLevelLibraries) {
       counts.set(
         library.id,
-        notes.filter((note) => note.parentId === library.id).length,
+        countDescendantNotes(notes, library.id),
       )
     }
     return counts

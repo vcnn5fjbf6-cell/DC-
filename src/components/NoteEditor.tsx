@@ -13,6 +13,7 @@ import {
   PencilLine,
   Plus,
   Save,
+  Search,
   Trash2,
   Unlink,
 } from 'lucide-react'
@@ -25,7 +26,9 @@ import {
   formatDate,
   getIncomingNotes,
   getOutgoingNotes,
+  noteExcerpt,
   parseWikiLinks,
+  relativeTime,
 } from '../lib/notes'
 import { AttachmentPanel } from './AttachmentPanel'
 import { DomainIcon, StarToggle, StatusPill, TagChip } from './ui'
@@ -63,6 +66,7 @@ export function NoteEditor({
   )
   const [tagInput, setTagInput] = useState('')
   const [childTitle, setChildTitle] = useState('')
+  const [landingQuery, setLandingQuery] = useState('')
   const uploadRef = useRef<{ open: () => void } | null>(null)
 
   const editableFieldsEqual = (
@@ -135,18 +139,55 @@ export function NoteEditor({
         ),
     [allNotes, note.id],
   )
-  const isLanding = !note.parentId && childNotes.length > 0
-  const landingKind = note.parentId ? '三级条目' : '子知识库'
+  const isMachineRoom = note.id === 'seed-machine-room'
+  const isLibraryLanding =
+    note.parentId === 'seed-machine-room' ||
+    (!note.parentId && !isMachineRoom && childNotes.length > 0)
+  const isLanding = isMachineRoom || isLibraryLanding
+  const landingKind = isLibraryLanding ? '文档条目' : '子知识库'
   const childEntryCounts = useMemo(() => {
     const counts = new Map<string, number>()
+    const countDescendants = (parentId: string): number =>
+      allNotes
+        .filter((item) => item.parentId === parentId)
+        .reduce(
+          (total, child) => total + 1 + countDescendants(child.id),
+          0,
+        )
     for (const child of childNotes) {
-      counts.set(
-        child.id,
-        allNotes.filter((item) => item.parentId === child.id).length,
-      )
+      counts.set(child.id, countDescendants(child.id))
     }
     return counts
   }, [allNotes, childNotes])
+  const libraryEntries = useMemo(() => {
+    const entries: Array<{ note: Note; depth: number }> = []
+    const visited = new Set<string>([note.id])
+    const visit = (parentId: string, depth: number) => {
+      const children = allNotes
+        .filter((item) => item.parentId === parentId)
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+        )
+      for (const child of children) {
+        if (visited.has(child.id)) continue
+        visited.add(child.id)
+        entries.push({ note: child, depth })
+        visit(child.id, depth + 1)
+      }
+    }
+    visit(note.id, 0)
+    return entries
+  }, [allNotes, note.id])
+  const filteredLibraryEntries = useMemo(() => {
+    const query = landingQuery.trim().toLocaleLowerCase()
+    if (!query) return libraryEntries
+    return libraryEntries.filter(({ note: entry }) => {
+      const haystack =
+        `${entry.title} ${entry.body} ${entry.tags.join(' ')}`.toLocaleLowerCase()
+      return haystack.includes(query)
+    })
+  }, [libraryEntries, landingQuery])
   const landingTitle = note.title.includes('：')
     ? note.title.split('：')[0]
     : note.title
@@ -287,32 +328,85 @@ export function NoteEditor({
                   <Database size={20} />
                 </span>
                 <div>
-                  <p>{landingTitle}</p>
-                  <h1>{landingKind}</h1>
+                  <p>{isLibraryLanding ? '文档库' : '知识分类'}</p>
+                  <h1>{landingTitle}</h1>
                 </div>
               </header>
 
-              <div className="kb-nav-grid">
-                {childNotes.map((child) => (
-                  <button
-                    key={child.id}
-                    type="button"
-                    className="kb-nav-card"
-                    onClick={() => onOpen(child.id)}
-                  >
-                    <span className="kb-nav-card-icon">
-                      <Database size={18} />
-                    </span>
-                    <span className="kb-nav-card-copy">
-                      <strong>{child.title}</strong>
+              {isLibraryLanding ? (
+                <>
+                  <section className="kb-library-search-block">
+                    <div className="kb-library-search-head">
+                      <span>
+                        当前文档库共 {libraryEntries.length} 个条目
+                      </span>
                       <small>
-                        {childEntryCounts.get(child.id) ?? 0} 个条目
+                        搜索范围仅限“{note.title}”
                       </small>
-                    </span>
-                    <ArrowRight size={17} />
-                  </button>
-                ))}
-              </div>
+                    </div>
+                    <div className="search-box">
+                      <Search size={16} />
+                      <input
+                        value={landingQuery}
+                        onChange={(event) => setLandingQuery(event.target.value)}
+                        placeholder={`搜索${note.title}内的标题、正文或标签`}
+                        aria-label={`搜索${note.title}`}
+                      />
+                    </div>
+                  </section>
+                  <div className="kb-entry-list">
+                    {filteredLibraryEntries.length === 0 ? (
+                      <p className="kb-entry-empty">
+                        当前文档库没有匹配条目，可在下方新建。
+                      </p>
+                    ) : (
+                      filteredLibraryEntries.map(({ note: entry, depth }) => (
+                        <button
+                          key={entry.id}
+                          type="button"
+                          className="kb-entry-row"
+                          style={{ marginLeft: depth * 16 }}
+                          onClick={() => onOpen(entry.id)}
+                        >
+                          <span className="kb-entry-copy">
+                            <strong>{entry.title}</strong>
+                            <small>
+                              {noteExcerpt(entry, 96) || '暂无正文'}
+                            </small>
+                          </span>
+                          <span className="kb-entry-meta">
+                            <StatusPill status={entry.status} />
+                            <time>{relativeTime(entry.updatedAt)}</time>
+                            <ArrowRight size={15} />
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="kb-nav-grid">
+                  {childNotes.map((child) => (
+                    <button
+                      key={child.id}
+                      type="button"
+                      className="kb-nav-card"
+                      onClick={() => onOpen(child.id)}
+                    >
+                      <span className="kb-nav-card-icon">
+                        <Database size={18} />
+                      </span>
+                      <span className="kb-nav-card-copy">
+                        <strong>{child.title}</strong>
+                        <small>
+                          {childEntryCounts.get(child.id) ?? 0} 个条目
+                        </small>
+                      </span>
+                      <ArrowRight size={17} />
+                    </button>
+                  ))}
+                </div>
+              )}
 
               <section className="kb-create-zone">
                 <div className="kb-create-zone-head">
@@ -321,7 +415,13 @@ export function NoteEditor({
                   </span>
                   <div>
                     <strong>新建{landingKind}</strong>
-                    <small>{note.parentId ? '新的三级条目' : '新的机房运维分类'}</small>
+                    <small>
+                      {isLibraryLanding
+                        ? '新条目会归入当前文档库'
+                        : note.parentId
+                          ? '新的三级条目'
+                          : '新的机房运维分类'}
+                    </small>
                   </div>
                 </div>
                 <div className="kb-create-form">
@@ -334,8 +434,8 @@ export function NoteEditor({
                         addChild()
                       }
                     }}
-                    placeholder="输入新知识库名称"
-                    aria-label="新知识库名称"
+                    placeholder={isLibraryLanding ? '输入文档条目名称' : '输入新知识库名称'}
+                    aria-label={isLibraryLanding ? '文档条目名称' : '新知识库名称'}
                   />
                   <button
                     type="button"

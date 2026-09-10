@@ -223,11 +223,19 @@ export function NoteEditor({
     setTagInput('')
   }
 
+  const defaultChildTitle = isLibraryLanding ? '未命名文档条目' : '未命名知识库'
   const addChild = () => {
-    const title = childTitle.trim()
-    if (!title) return
+    const title = childTitle.trim() || defaultChildTitle
     onCreateChild(note.id, title)
     setChildTitle('')
+  }
+
+  const createFromTopbar = () => {
+    if (isLanding) {
+      onCreateChild(note.id, defaultChildTitle)
+      return
+    }
+    onCreate()
   }
 
   const removeTag = (tag: string) => {
@@ -265,10 +273,21 @@ export function NoteEditor({
           <button
             type="button"
             className="btn btn-primary editor-new-btn"
-            onClick={onCreate}
+            onClick={createFromTopbar}
+            title={
+              isLibraryLanding
+                ? '在当前文档库新建文档条目'
+                : isLanding
+                  ? '新建子知识库'
+                  : '新建知识条目'
+            }
           >
             <FilePlus2 size={16} />
-            新建条目
+            {isLibraryLanding
+              ? '新建文档条目'
+              : isLanding
+                ? '新建知识库'
+                : '新建条目'}
           </button>
           {!isLanding && (
             <button
@@ -417,7 +436,7 @@ export function NoteEditor({
                     <strong>新建{landingKind}</strong>
                     <small>
                       {isLibraryLanding
-                        ? '新条目会归入当前文档库'
+                        ? '新条目会归入当前文档库，留空自动命名'
                         : note.parentId
                           ? '新的三级条目'
                           : '新的机房运维分类'}

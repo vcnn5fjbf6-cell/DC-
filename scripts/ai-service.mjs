@@ -369,7 +369,7 @@ const EXTRACT_SCHEMA = {
 }
 
 const EXTRACT_SYSTEM =
-  '你是企业知识库结构化整理助手。请从附件中逐条提取重点操作步骤和对应备注，并只输出符合给定 JSON Schema 的 JSON。\n\n规则：\n1. steps 数组必须严格按原文档从上到下、从左到右的阅读顺序排列，禁止按重要性、层级或内容相似度重排，禁止调换步骤顺序。\n2. 每个步骤分别填写 number、name、action、remark：number 保留原编号；name 是最短且明确的步骤名称；action 是该步骤完整、可执行的操作内容；remark 只放对应的备注、注意、风险、禁止或参照信息。没有内容的字段填空字符串。\n3. 细化提取：一个步骤中有多个关键操作时，按原文顺序完整写入 action，不要概括丢失；同一行或同一单元格中的备注、注意或风险内容必须归入对应步骤的 remark，用于补全步骤语义，但最终展示时不得出现“备注”字样，也不得生成独立备注区。\n4. 表格中的“操作步骤/步骤名称/动作”是步骤名，“操作内容/实施内容/说明”是操作内容，“备注/注意事项/风险”是对应备注。\n5. 删除页眉页脚、水印、页码、文件编号、版本、编制人、审核人、联系方式、模板说明、完成标准、执行情况、是/否、图片信息等噪声；不要把执行状态误当成备注。\n6. 不编造原文没有的内容；不要输出 Markdown、解释、开场白、结束语或代码围栏。'
+  '你是企业知识库结构化整理助手。请从附件中逐条提取重点操作步骤和对应备注，并只输出符合给定 JSON Schema 的 JSON。\n\n规则：\n1. steps 数组必须严格按原文档从上到下、从左到右的阅读顺序排列，禁止按重要性、层级或内容相似度重排，禁止调换步骤顺序。\n2. 每个步骤分别填写 number、name、action、remark：number 保留原编号；name 是最短且明确的步骤名称；action 是该步骤完整、可执行的操作内容；remark 只放对应的备注、注意、风险、禁止或参照信息。没有内容的字段填空字符串。\n3. 细化提取：一个步骤中有多个关键操作时，按原文顺序完整写入 action，不要概括丢失；同一行或同一单元格中的备注、注意或风险内容必须归入对应步骤的 remark，用于补全步骤语义，但最终展示时不得出现“备注”字样，也不得生成独立备注区。\n4. 表格中的“操作步骤/步骤名称/动作”是步骤名，“操作内容/实施内容/说明”是操作内容，“备注/注意事项/风险”是对应备注。\n5. 自动润色：删除重复词、口水话、乱码、错误换行和无效空行，合并同一操作或同一补充信息，统一标点、句式和专业表达；不得改变事实、数字、日期、步骤编号、步骤顺序或专有名词。\n6. 删除页眉页脚、水印、页码、文件编号、版本、编制人、审核人、联系方式、模板说明、完成标准、执行情况、是/否、图片信息等噪声；不要把执行状态误当成备注。\n7. 不编造原文没有的内容；最终正文要清晰、简洁、专业，不要输出 Markdown 解释、开场白、结束语或代码围栏。'
 
 function splitExtractRemark(value) {
   const text = String(value ?? '').trim()
@@ -405,21 +405,121 @@ function collectSourceStepOrder(content) {
   return order
 }
 
+function cleanStepNumber(value) {
+  const text = String(value ?? '').trim().replace(/[.、．]+$/u, '')
+  return /^\d+(?:\.\d+)*$/u.test(text) ? text : ''
+}
+
+function cleanExtractDetail(value, stepName = '') {
+  const fragments = String(value ?? '')
+    .split(/\r?\n+|(?<=[。！？；;])/u)
+    .map((fragment) => {
+      let part = fragment
+        .trim()
+        .replace(
+          /^(?:第\s*[一二三四五六七八九十百\d]+\s*步|步骤\s*[一二三四五六七八九十百\d]+|step\s*\d+)\s*[.、．:：]?\s*/iu,
+          '',
+        )
+        .replace(/^\d+(?:\.\d+)*\s*[.、．:：-]\s*/u, '')
+        .replace(/^\d+(?:\.\d+)*\s+/u, '')
+        .replace(/^\*+|\*+$/gu, '')
+        .trim()
+      if (stepName && part.startsWith(stepName)) {
+        part = part.slice(stepName.length).replace(/^[：:；;，,\s]+/u, '').trim()
+      }
+      return part
+    })
+    .filter(Boolean)
+  return fragments.join('；')
+}
+
+function mergeExtractDetails(...values) {
+  const fragments = []
+  for (const value of values) {
+    String(value ?? '')
+      .split(/[。！？；;\n]+/u)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .forEach((item) => fragments.push(item))
+  }
+  const unique = []
+  for (const fragment of fragments) {
+    const compact = fragment.replace(/[\s。；;、，,.!?！？]/gu, '')
+    if (!compact) continue
+    const matchedIndex = unique.findIndex(
+      (item) => item.compact.includes(compact) || compact.includes(item.compact),
+    )
+    if (matchedIndex < 0) {
+      unique.push({ text: fragment, compact })
+      continue
+    }
+    if (compact.length > unique[matchedIndex].compact.length) {
+      unique[matchedIndex] = { text: fragment, compact }
+    }
+  }
+  return unique.map((item) => item.text).join('；')
+}
+
+function compactStepName(value) {
+  return String(value ?? '').replace(/[\s\d*。；;、，,.!?！？：:]/gu, '')
+}
+
+function dedupeExtractSteps(steps) {
+  const merged = []
+  const indexes = new Map()
+  for (const step of steps) {
+    const key = compactStepName(step.name)
+    if (key && indexes.has(key)) {
+      const target = merged[indexes.get(key)]
+      target.action = mergeExtractDetails(target.action, step.action)
+      target.remark = mergeExtractDetails(target.remark, step.remark)
+      if (!target.number && step.number) target.number = step.number
+      continue
+    }
+    const copy = { ...step }
+    if (key) indexes.set(key, merged.length)
+    merged.push(copy)
+  }
+  return merged
+}
+
+function makeStepNumbersSequential(steps) {
+  const numeric = steps.map((step) =>
+    /^\d+(?:\.\d+)*$/u.test(String(step.number ?? '')) ? step.number : '',
+  )
+  const roots = [...new Set(
+    numeric
+      .filter(Boolean)
+      .map((number) => Number(String(number).split('.')[0])),
+  )]
+  const contiguous =
+    numeric.every(Boolean) &&
+    roots.length > 0 &&
+    roots.every((number, index) => number === index + 1)
+  if (!contiguous) {
+    steps.forEach((step, index) => {
+      step.number = String(index + 1)
+    })
+  }
+  return steps
+}
+
 function normalizeExtractStep(step, index) {
-  const rawAction = String(step?.action ?? '').trim()
-  const split = splitExtractRemark(rawAction)
-  const action = split.action
-  let remark = String(step?.remark ?? '').trim()
-  remark = remark.replace(/^(备注|注|注意|风险提示|说明)[：:]\s*/u, '').trim()
-  if (!remark && split.remark) remark = split.remark
-  const number = String(step?.number ?? '').trim().replace(/[.、．]+$/u, '')
   const rawName = String(step?.name ?? '').trim()
   const name = rawName
     .replace(/^\d+(?:\.\d+)*[.、．]?\s*/u, '')
     .replace(/^\*+|\*+$/gu, '')
     .trim()
-  const compactName = name.replace(/[\s。；;、，,.]/gu, '')
-  const compactAction = action.replace(/[\s。；;、，,.]/gu, '')
+  const rawAction = String(step?.action ?? '').trim()
+  const split = splitExtractRemark(rawAction)
+  const action = cleanExtractDetail(split.action, name)
+  let remark = String(step?.remark ?? '').trim()
+  remark = remark.replace(/^(备注|注|注意|风险提示|说明)[：:]\s*/u, '').trim()
+  if (!remark && split.remark) remark = split.remark
+  remark = cleanExtractDetail(remark, name)
+  const number = cleanStepNumber(step?.number)
+  const compactName = compactStepName(name)
+  const compactAction = compactStepName(action)
   const normalizedAction = compactAction && compactAction !== compactName ? action : ''
   return {
     number,
@@ -462,7 +562,11 @@ function orderExtractSteps(steps, content) {
 }
 
 function ensureSentence(value) {
-  const text = String(value ?? '').trim()
+  const text = String(value ?? '')
+    .trim()
+    .replace(/[。！？.!?]\s*[；;]/gu, '；')
+    .replace(/[；;]{2,}/gu, '；')
+    .replace(/。{2,}/gu, '。')
   if (!text) return ''
   return /[。！？.!?；;]$/u.test(text) ? text : `${text}。`
 }
@@ -508,7 +612,9 @@ function formatExtractPayload(payload, content, fallbackTitle = '') {
     .map(normalizeExtractStep)
     .filter((step) => step.name || step.action || step.remark)
   if (steps.length === 0) return ''
-  const ordered = orderExtractSteps(steps, content)
+  const deduped = dedupeExtractSteps(steps)
+  const ordered = orderExtractSteps(deduped, content)
+  makeStepNumbersSequential(ordered)
   const parsedTitle =
     String(payload.title ?? '')
       .replace(/^[\s*#]+|[\s*#]+$/gu, '')
@@ -524,40 +630,6 @@ function formatExtractPayload(payload, content, fallbackTitle = '') {
     '',
     ...ordered.map(formatExtractStep),
   ].join('\n')
-}
-
-const POLISH_SYSTEM =
-  '你是企业知识库正文编辑助手。请把用户提供的冗长、混乱或格式不统一的正文整理成清晰、简洁、专业的 Markdown。\n\n必须遵守：\n1. 保留全部事实、数字、日期、步骤编号、步骤顺序、专有名词、链接和代码，不得编造、删除或改变原意。\n2. 删除重复内容、乱码、页眉页脚、模板套话和无效空行；合并被错误换行拆开的句子；同一标题、操作或段落只保留一次，重复信息必须合并。\n3. 有流程步骤时优先整理为编号步骤，复杂内容可用二级或三级标题分区；不要输出一级标题，不要重复用户提供的正文标题；同一动作不要同时作为标题和列表项重复出现，同一层级只保留一种表达方式。\n4. 把备注、注意、风险、参照、禁止和避免事项并入对应步骤或段落的正常正文，不得写“备注”二字，不得生成独立备注区。\n5. 保持原有 Markdown 结构；原文没有结构时再合理补充标题和列表。\n6. 只输出润色后的正文，不解释修改过程，不添加开场白、结束语或代码围栏。'
-
-function normalizePolishedMarkdown(value, title = '') {
-  const lines = cleanModelOutput(value).split(/\r?\n/)
-  const normalizedTitle = String(title ?? '').replace(/^#+\s*/u, '').trim()
-  const firstLineIndex = lines.findIndex((line) => line.trim())
-  if (
-    normalizedTitle &&
-    firstLineIndex >= 0 &&
-    lines[firstLineIndex].replace(/^#+\s*/u, '').trim() === normalizedTitle
-  ) {
-    lines.splice(firstLineIndex, 1)
-  }
-  const output = []
-  let skippingRemarkSection = false
-  for (const line of lines) {
-    const trimmed = line.trim()
-    if (/^#{1,6}\s*备注\s*$/u.test(trimmed)) {
-      skippingRemarkSection = true
-      continue
-    }
-    if (skippingRemarkSection) {
-      if (/^#{1,6}\s+\S/u.test(trimmed)) skippingRemarkSection = false
-      else continue
-    }
-    output.push(line.replace(/备注[：:]\s*/gu, '').replace(/[ \t]+$/u, ''))
-  }
-  return output
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
 }
 
 const ASK_SYSTEM =
@@ -599,32 +671,6 @@ async function handleExtract(req, res) {
     ? formatExtractPayload(payload, content, fileName)
     : cleanModelOutput(result)
   sendJson(res, 200, { text, source })
-}
-
-async function handlePolish(req, res) {
-  refreshProvider()
-  const body = JSON.parse(await readBody(req, 2 * 1024 * 1024))
-  const title = String(body.title ?? '').trim().slice(0, 200)
-  const content = String(body.content ?? '').trim().slice(0, 32000)
-  if (!content) {
-    sendJson(res, 400, { error: 'empty content' })
-    return
-  }
-  const user = title
-    ? `正文标题：${title}\n\n待润色正文：\n${content}`
-    : `待润色正文：\n${content}`
-  const result = await chatCompletions({
-    system: POLISH_SYSTEM,
-    user,
-    maxTokens: 8000,
-    temperature: 0.1,
-  })
-  const text = normalizePolishedMarkdown(result, title)
-  if (!text) throw new Error('AI 未返回润色内容')
-  sendJson(res, 200, {
-    text,
-    source: provider.source === 'deepseek-direct' ? 'deepseek-direct' : 'ai',
-  })
 }
 
 async function handleAsk(req, res) {
@@ -744,7 +790,7 @@ const server = createServer(async (req, res) => {
       ok: providerReady(),
       model: provider.model || null,
       endpoint: provider.baseUrl || null,
-      capabilities: providerReady() ? ['extract', 'polish', 'ask'] : [],
+      capabilities: providerReady() ? ['extract', 'ask'] : [],
     })
     return
   }
@@ -755,10 +801,6 @@ const server = createServer(async (req, res) => {
   try {
     if (req.url === '/extract') {
       await handleExtract(req, res)
-      return
-    }
-    if (req.url === '/polish') {
-      await handlePolish(req, res)
       return
     }
     if (req.url === '/ask') {

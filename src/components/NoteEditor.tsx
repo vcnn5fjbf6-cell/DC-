@@ -15,12 +15,10 @@ import {
   Save,
   Trash2,
   Unlink,
-  WandSparkles,
 } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Note, NoteStatus } from '../types'
 import { domains } from '../data/domains'
-import { polishContentWithAi } from '../lib/aiExtract'
 import { renderMarkdown } from '../lib/markdown'
 import {
   findNoteByTitle,
@@ -65,7 +63,6 @@ export function NoteEditor({
   )
   const [tagInput, setTagInput] = useState('')
   const [childTitle, setChildTitle] = useState('')
-  const [polishing, setPolishing] = useState(false)
   const uploadRef = useRef<{ open: () => void } | null>(null)
 
   const editableFieldsEqual = (
@@ -166,35 +163,6 @@ export function NoteEditor({
     setSaveState('pending')
   }
 
-  const polishBody = async () => {
-    const clean = draft.body.trim()
-    if (!clean) {
-      window.alert('当前正文为空，请先输入或上传内容。')
-      return
-    }
-    if (
-      !window.confirm(
-        'AI 将整理当前正文，删除重复和乱格式，并统一结构与表达。原文中的事实、数字和步骤顺序会保留，是否继续？',
-      )
-    ) {
-      return
-    }
-    setPolishing(true)
-    try {
-      const polished = await polishContentWithAi(draft.title, clean)
-      applyAiContent(polished)
-      setMode('preview')
-    } catch (error) {
-      window.alert(
-        error instanceof Error
-          ? error.message
-          : 'AI 润色失败，请确认本机 AI 服务已启动后重试。',
-      )
-    } finally {
-      setPolishing(false)
-    }
-  }
-
   const changeTitle = (title: string) => {
     setDraft((current) => ({
       ...current,
@@ -270,18 +238,6 @@ export function NoteEditor({
             >
               <Paperclip size={16} />
               上传附件
-            </button>
-          )}
-          {!isLanding && (
-            <button
-              type="button"
-              className="btn editor-upload-btn"
-              onClick={() => void polishBody()}
-              disabled={polishing}
-              title="AI 润色整理当前正文"
-            >
-              <WandSparkles size={16} />
-              {polishing ? '润色中' : 'AI 润色'}
             </button>
           )}
           {!isLanding && (

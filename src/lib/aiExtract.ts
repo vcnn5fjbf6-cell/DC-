@@ -266,7 +266,7 @@ async function structureWithAi(
         {
           role: 'system',
           content:
-            '你是企业知识库结构化整理助手。提取重点操作步骤时，把每一步的备注、注意、风险、参照、禁止或避免事项作为补充信息用于完善步骤，但最终正文不得出现“备注”字样。只输出以下格式：\n**文档标题**\n\n### 操作步骤\n1. **接收工单**：客服发送工单及客服邮件；无工单需后续补齐。\n2.1 **系统确认**：确认机柜归属并打印申请内容；打印现场核实确认。\n\n规则：保留步骤编号、步骤名称和操作内容；将补充信息直接并入对应步骤正文，不要输出独立备注区、不要写“备注”、不要输出代码围栏；删除页眉页脚、水印、页码、元信息、执行情况、是/否、完成标准、图片信息；不要编造内容。',
+            '你是企业知识库结构化整理助手。提取重点操作步骤时，把每一步的备注、注意、风险、参照、禁止或避免事项作为补充信息用于完善步骤，但最终正文不得出现“备注”字样。只输出以下格式：\n**文档标题**\n\n### 操作步骤\n1. **接收工单**：客服发送工单及客服邮件；无工单需后续补齐。\n2.1 **系统确认**：确认机柜归属并打印申请内容；打印现场核实确认。\n\n规则：保留步骤编号、步骤名称和操作内容；自动删除重复词、口水话、乱码和错误换行，统一标点与专业表达，但不得改变事实、数字和步骤顺序；将补充信息直接并入对应步骤正文，不要输出独立备注区、不要写“备注”、不要输出代码围栏；删除页眉页脚、水印、页码、元信息、执行情况、是/否、完成标准、图片信息；不要编造内容。',
         },
         {
           role: 'user',
@@ -544,74 +544,6 @@ function localStructuredContent(fileName: string, content: string): string {
   if (contentParts.length === 0) return ''
   const title = fileName.replace(/\.[^.]+$/, '')
   return [`**${title}**`, '', contentParts.join('\n\n')].join('\n')
-}
-
-function splitForPolishing(content: string, maxLength = 12000): string[] {
-  const chunks: string[] = []
-  let current = ''
-  const flush = () => {
-    if (current.trim()) chunks.push(current.trim())
-    current = ''
-  }
-  for (const line of content.split(/\r?\n/)) {
-    if (line.length > maxLength) {
-      flush()
-      for (let index = 0; index < line.length; index += maxLength) {
-        chunks.push(line.slice(index, index + maxLength))
-      }
-      continue
-    }
-    if (current && current.length + line.length + 1 > maxLength) flush()
-    current = current ? `${current}\n${line}` : line
-  }
-  flush()
-  return chunks
-}
-
-async function polishChunkWithAi(title: string, content: string): Promise<string> {
-  const controller = new AbortController()
-  const timer = window.setTimeout(() => controller.abort(), 180000)
-  try {
-    const response = await fetch('http://127.0.0.1:5188/polish', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        title: title.trim().slice(0, 200),
-        content,
-      }),
-      signal: controller.signal,
-    })
-    const result = (await response.json().catch(() => ({}))) as {
-      text?: string
-      error?: string
-    }
-    if (!response.ok) {
-      throw new Error(result.error || `AI 润色失败：HTTP ${response.status}`)
-    }
-    const polished = result.text?.trim() ?? ''
-    if (!polished) throw new Error('AI 未返回润色内容')
-    return polished
-  } finally {
-    window.clearTimeout(timer)
-  }
-}
-
-export async function polishContentWithAi(
-  title: string,
-  content: string,
-): Promise<string> {
-  const clean = content.trim()
-  if (!clean) return ''
-  const chunks = splitForPolishing(clean)
-  const polished: string[] = []
-  for (let index = 0; index < chunks.length; index += 1) {
-    const partTitle =
-      chunks.length > 1
-        ? `${title.trim()}（第 ${index + 1}/${chunks.length} 部分）`
-        : title
-    polished.push(await polishChunkWithAi(partTitle, chunks[index]))
-  }
-  return polished.join('\n\n').trim()
 }
 
 export async function generateStructuredAttachmentContent(

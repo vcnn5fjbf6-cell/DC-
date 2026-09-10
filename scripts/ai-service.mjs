@@ -369,7 +369,7 @@ const EXTRACT_SCHEMA = {
 }
 
 const EXTRACT_SYSTEM =
-  '你是企业知识库结构化整理助手。请从附件中逐条提取重点操作步骤和对应备注，并只输出符合给定 JSON Schema 的 JSON。\n\n规则：\n1. steps 数组必须严格按原文档从上到下、从左到右的阅读顺序排列，禁止按重要性、层级或内容相似度重排，禁止调换步骤顺序。\n2. 每个步骤分别填写 number、name、action、remark：number 保留原编号；name 是最短且明确的步骤名称；action 是该步骤完整、可执行的操作内容；remark 只放对应的备注、注意、风险、禁止或参照信息。没有内容的字段填空字符串。\n3. 细化提取：一个步骤中有多个关键操作时，按原文顺序完整写入 action，不要概括丢失；同一行或同一单元格中的备注必须归入对应步骤，不要单独形成备注列表。\n4. 表格中的“操作步骤/步骤名称/动作”是步骤名，“操作内容/实施内容/说明”是操作内容，“备注/注意事项/风险”是对应备注。\n5. 删除页眉页脚、水印、页码、文件编号、版本、编制人、审核人、联系方式、模板说明、完成标准、执行情况、是/否、图片信息等噪声；不要把执行状态误当成备注。\n6. 不编造原文没有的内容；不要输出 Markdown、解释、开场白、结束语或代码围栏。'
+  '你是企业知识库结构化整理助手。请从附件中逐条提取重点操作步骤和对应备注，并只输出符合给定 JSON Schema 的 JSON。\n\n规则：\n1. steps 数组必须严格按原文档从上到下、从左到右的阅读顺序排列，禁止按重要性、层级或内容相似度重排，禁止调换步骤顺序。\n2. 每个步骤分别填写 number、name、action、remark：number 保留原编号；name 是最短且明确的步骤名称；action 是该步骤完整、可执行的操作内容；remark 只放对应的备注、注意、风险、禁止或参照信息。没有内容的字段填空字符串。\n3. 细化提取：一个步骤中有多个关键操作时，按原文顺序完整写入 action，不要概括丢失；同一行或同一单元格中的备注、注意或风险内容必须归入对应步骤的 remark，用于补全步骤语义，但最终展示时不得出现“备注”字样，也不得生成独立备注区。\n4. 表格中的“操作步骤/步骤名称/动作”是步骤名，“操作内容/实施内容/说明”是操作内容，“备注/注意事项/风险”是对应备注。\n5. 删除页眉页脚、水印、页码、文件编号、版本、编制人、审核人、联系方式、模板说明、完成标准、执行情况、是/否、图片信息等噪声；不要把执行状态误当成备注。\n6. 不编造原文没有的内容；不要输出 Markdown、解释、开场白、结束语或代码围栏。'
 
 function splitExtractRemark(value) {
   const text = String(value ?? '').trim()
@@ -470,10 +470,19 @@ function ensureSentence(value) {
 function formatExtractStep(step, index) {
   const number = step.number || String(index + 1)
   const prefix = number.includes('.') ? number : `${number}.`
-  let line = `${prefix} **${step.name}**`
-  if (step.action) line += `：${ensureSentence(step.action)}`
-  if (step.remark) line += `${step.action ? ' ' : '。'}备注：${ensureSentence(step.remark)}`
-  return line
+  const details = [step.action, step.remark]
+    .map((value) => String(value ?? '').trim())
+    .filter(Boolean)
+    .filter(
+      (value, valueIndex, values) =>
+        !values.some(
+          (other, otherIndex) =>
+            otherIndex < valueIndex &&
+            (other.includes(value) || value.includes(other)),
+        ),
+    )
+  const detail = details.map(ensureSentence).join('')
+  return `${prefix} **${step.name}**${detail ? `：${detail}` : ''}`
 }
 
 function parseExtractPayload(value) {
@@ -517,6 +526,40 @@ function formatExtractPayload(payload, content, fallbackTitle = '') {
   ].join('\n')
 }
 
+const POLISH_SYSTEM =
+  '你是企业知识库正文编辑助手。请把用户提供的冗长、混乱或格式不统一的正文整理成清晰、简洁、专业的 Markdown。\n\n必须遵守：\n1. 保留全部事实、数字、日期、步骤编号、步骤顺序、专有名词、链接和代码，不得编造、删除或改变原意。\n2. 删除重复内容、乱码、页眉页脚、模板套话和无效空行；合并被错误换行拆开的句子；同一标题、操作或段落只保留一次，重复信息必须合并。\n3. 有流程步骤时优先整理为编号步骤，复杂内容可用二级或三级标题分区；不要输出一级标题，不要重复用户提供的正文标题；同一动作不要同时作为标题和列表项重复出现，同一层级只保留一种表达方式。\n4. 把备注、注意、风险、参照、禁止和避免事项并入对应步骤或段落的正常正文，不得写“备注”二字，不得生成独立备注区。\n5. 保持原有 Markdown 结构；原文没有结构时再合理补充标题和列表。\n6. 只输出润色后的正文，不解释修改过程，不添加开场白、结束语或代码围栏。'
+
+function normalizePolishedMarkdown(value, title = '') {
+  const lines = cleanModelOutput(value).split(/\r?\n/)
+  const normalizedTitle = String(title ?? '').replace(/^#+\s*/u, '').trim()
+  const firstLineIndex = lines.findIndex((line) => line.trim())
+  if (
+    normalizedTitle &&
+    firstLineIndex >= 0 &&
+    lines[firstLineIndex].replace(/^#+\s*/u, '').trim() === normalizedTitle
+  ) {
+    lines.splice(firstLineIndex, 1)
+  }
+  const output = []
+  let skippingRemarkSection = false
+  for (const line of lines) {
+    const trimmed = line.trim()
+    if (/^#{1,6}\s*备注\s*$/u.test(trimmed)) {
+      skippingRemarkSection = true
+      continue
+    }
+    if (skippingRemarkSection) {
+      if (/^#{1,6}\s+\S/u.test(trimmed)) skippingRemarkSection = false
+      else continue
+    }
+    output.push(line.replace(/备注[：:]\s*/gu, '').replace(/[ \t]+$/u, ''))
+  }
+  return output
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 const ASK_SYSTEM =
   '你是「全知库」内部知识库的 AI 智能助手。请只依据提供的知识资料回答用户问题，不要编造资料里没有的内容；如果资料不足以回答，请明确说明缺少哪些信息。使用简洁清晰的中文 Markdown 回答，适当使用列表；当回答内容来自某份资料时，在句尾用【资料标题】标注引用。'
 
@@ -556,6 +599,32 @@ async function handleExtract(req, res) {
     ? formatExtractPayload(payload, content, fileName)
     : cleanModelOutput(result)
   sendJson(res, 200, { text, source })
+}
+
+async function handlePolish(req, res) {
+  refreshProvider()
+  const body = JSON.parse(await readBody(req, 2 * 1024 * 1024))
+  const title = String(body.title ?? '').trim().slice(0, 200)
+  const content = String(body.content ?? '').trim().slice(0, 32000)
+  if (!content) {
+    sendJson(res, 400, { error: 'empty content' })
+    return
+  }
+  const user = title
+    ? `正文标题：${title}\n\n待润色正文：\n${content}`
+    : `待润色正文：\n${content}`
+  const result = await chatCompletions({
+    system: POLISH_SYSTEM,
+    user,
+    maxTokens: 8000,
+    temperature: 0.1,
+  })
+  const text = normalizePolishedMarkdown(result, title)
+  if (!text) throw new Error('AI 未返回润色内容')
+  sendJson(res, 200, {
+    text,
+    source: provider.source === 'deepseek-direct' ? 'deepseek-direct' : 'ai',
+  })
 }
 
 async function handleAsk(req, res) {
@@ -675,7 +744,7 @@ const server = createServer(async (req, res) => {
       ok: providerReady(),
       model: provider.model || null,
       endpoint: provider.baseUrl || null,
-      capabilities: providerReady() ? ['extract', 'ask'] : [],
+      capabilities: providerReady() ? ['extract', 'polish', 'ask'] : [],
     })
     return
   }
@@ -686,6 +755,10 @@ const server = createServer(async (req, res) => {
   try {
     if (req.url === '/extract') {
       await handleExtract(req, res)
+      return
+    }
+    if (req.url === '/polish') {
+      await handlePolish(req, res)
       return
     }
     if (req.url === '/ask') {

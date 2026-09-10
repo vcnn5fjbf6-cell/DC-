@@ -109,7 +109,8 @@ export function AiSettingsPanel() {
         </div>
         <div className="ai-capability-list">
           <span><CheckCircle2 size={13} /> 文档 / 表格提取</span>
-          <span><CheckCircle2 size={13} /> 重点步骤与备注</span>
+          <span><CheckCircle2 size={13} /> 重点步骤与补充内容</span>
+          <span><CheckCircle2 size={13} /> 长文润色整理</span>
           <span><CheckCircle2 size={13} /> 知识库问答</span>
         </div>
       </div>

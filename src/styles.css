@@ -5340,6 +5340,48 @@ select {
   border-radius: 9px;
 }
 
+/* ---------- 文档库严格层级页 ---------- */
+.kb-library-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.kb-category-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.kb-category-grid .kb-nav-card {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  gap: 10px;
+  min-height: 96px;
+  padding: 14px;
+}
+
+.kb-category-grid .kb-nav-card-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.kb-category-grid .kb-nav-card-copy strong {
+  font-size: 15px;
+}
+
+.kb-direct-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.kb-direct-documents h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
 /* ---------- markdown 预览微调 ---------- */
 .markdown-preview h1,
 .markdown-preview h2,
@@ -5580,6 +5622,16 @@ select {
 }
 
 @media (max-width: 860px) {
+  .kb-category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .kb-library-search-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+
   .ai-chat {
     height: calc(100vh - 260px);
     min-height: 420px;
@@ -5595,6 +5647,12 @@ select {
 
   .ai-suggestions {
     padding: 0 14px 12px;
+  }
+}
+
+@media (max-width: 620px) {
+  .kb-category-grid {
+    grid-template-columns: 1fr;
   }
 }
 

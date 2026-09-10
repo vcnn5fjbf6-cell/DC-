@@ -161,35 +161,33 @@ export function NoteEditor({
     }
     return counts
   }, [allNotes, childNotes])
-  const libraryEntries = useMemo(() => {
-    const entries: Array<{ note: Note; depth: number }> = []
-    const visited = new Set<string>([note.id])
-    const visit = (parentId: string, depth: number) => {
-      const children = allNotes
-        .filter((item) => item.parentId === parentId)
-        .sort(
-          (a, b) =>
-            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-        )
-      for (const child of children) {
-        if (visited.has(child.id)) continue
-        visited.add(child.id)
-        entries.push({ note: child, depth })
-        visit(child.id, depth + 1)
-      }
-    }
-    visit(note.id, 0)
-    return entries
-  }, [allNotes, note.id])
-  const filteredLibraryEntries = useMemo(() => {
+  const currentEntries = useMemo(
+    () => childNotes.map((child) => ({ note: child })),
+    [childNotes],
+  )
+  const filteredCurrentEntries = useMemo(() => {
     const query = landingQuery.trim().toLocaleLowerCase()
-    if (!query) return libraryEntries
-    return libraryEntries.filter(({ note: entry }) => {
+    if (!query) return currentEntries
+    return currentEntries.filter(({ note: entry }) => {
       const haystack =
         `${entry.title} ${entry.body} ${entry.tags.join(' ')}`.toLocaleLowerCase()
       return haystack.includes(query)
     })
-  }, [libraryEntries, landingQuery])
+  }, [currentEntries, landingQuery])
+  const visibleCategoryEntries = useMemo(
+    () =>
+      filteredCurrentEntries.filter(({ note: entry }) =>
+        entry.tags.includes('文档分类'),
+      ),
+    [filteredCurrentEntries],
+  )
+  const visibleDocumentEntries = useMemo(
+    () =>
+      filteredCurrentEntries.filter(
+        ({ note: entry }) => !entry.tags.includes('文档分类'),
+      ),
+    [filteredCurrentEntries],
+  )
   const landingTitle = note.title.includes('：')
     ? note.title.split('：')[0]
     : note.title
@@ -367,7 +365,9 @@ export function NoteEditor({
                   <section className="kb-library-search-block">
                     <div className="kb-library-search-head">
                       <span>
-                        当前文档库共 {libraryEntries.length} 个条目
+                        {isDocumentCategory
+                          ? `当前分类共 ${childNotes.length} 个文档`
+                          : `当前文档库含 ${childNotes.length} 个直接分类/条目`}
                       </span>
                       <small>
                         搜索范围仅限“{note.title}”
@@ -378,40 +378,107 @@ export function NoteEditor({
                       <input
                         value={landingQuery}
                         onChange={(event) => setLandingQuery(event.target.value)}
-                        placeholder={`搜索${note.title}内的标题、正文或标签`}
+                        placeholder={
+                          isDocumentCategory
+                            ? `搜索${note.title}内的文档条目`
+                            : `搜索${note.title}内的分类或条目`
+                        }
                         aria-label={`搜索${note.title}`}
                       />
                     </div>
                   </section>
-                  <div className="kb-entry-list">
-                    {filteredLibraryEntries.length === 0 ? (
-                      <p className="kb-entry-empty">
-                        当前文档库没有匹配条目，可在下方新建。
-                      </p>
-                    ) : (
-                      filteredLibraryEntries.map(({ note: entry, depth }) => (
-                        <button
-                          key={entry.id}
-                          type="button"
-                          className="kb-entry-row"
-                          style={{ marginLeft: depth * 16 }}
-                          onClick={() => onOpen(entry.id)}
-                        >
-                          <span className="kb-entry-copy">
-                            <strong>{entry.title}</strong>
-                            <small>
-                              {noteExcerpt(entry, 96) || '暂无正文'}
-                            </small>
-                          </span>
-                          <span className="kb-entry-meta">
-                            <StatusPill status={entry.status} />
-                            <time>{relativeTime(entry.updatedAt)}</time>
-                            <ArrowRight size={15} />
-                          </span>
-                        </button>
-                      ))
-                    )}
-                  </div>
+
+                  {isDocumentCategory ? (
+                    <div className="kb-entry-list">
+                      {filteredCurrentEntries.length === 0 ? (
+                        <p className="kb-entry-empty">
+                          当前分类没有匹配文档，可在下方新建。
+                        </p>
+                      ) : (
+                        filteredCurrentEntries.map(({ note: entry }) => (
+                          <button
+                            key={entry.id}
+                            type="button"
+                            className="kb-entry-row"
+                            onClick={() => onOpen(entry.id)}
+                          >
+                            <span className="kb-entry-copy">
+                              <strong>{entry.title}</strong>
+                              <small>
+                                {noteExcerpt(entry, 96) || '暂无正文'}
+                              </small>
+                            </span>
+                            <span className="kb-entry-meta">
+                              <StatusPill status={entry.status} />
+                              <time>{relativeTime(entry.updatedAt)}</time>
+                              <ArrowRight size={15} />
+                            </span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  ) : (
+                    <div className="kb-library-groups">
+                      {visibleCategoryEntries.length > 0 && (
+                        <div className="kb-nav-grid kb-category-grid">
+                          {visibleCategoryEntries.map(({ note: category }) => (
+                            <button
+                              key={category.id}
+                              type="button"
+                              className="kb-nav-card"
+                              onClick={() => onOpen(category.id)}
+                            >
+                              <span className="kb-nav-card-icon">
+                                <Database size={18} />
+                              </span>
+                              <span className="kb-nav-card-copy">
+                                <strong>{category.title}</strong>
+                                <small>
+                                  {childEntryCounts.get(category.id) ?? 0} 个文档
+                                </small>
+                              </span>
+                              <ArrowRight size={17} />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {visibleDocumentEntries.length > 0 && (
+                        <section className="kb-direct-documents">
+                          <h2>直接归入库的文档</h2>
+                          <div className="kb-entry-list">
+                            {visibleDocumentEntries.map(({ note: entry }) => (
+                              <button
+                                key={entry.id}
+                                type="button"
+                                className="kb-entry-row"
+                                onClick={() => onOpen(entry.id)}
+                              >
+                                <span className="kb-entry-copy">
+                                  <strong>{entry.title}</strong>
+                                  <small>
+                                    {noteExcerpt(entry, 96) || '暂无正文'}
+                                  </small>
+                                </span>
+                                <span className="kb-entry-meta">
+                                  <StatusPill status={entry.status} />
+                                  <time>{relativeTime(entry.updatedAt)}</time>
+                                  <ArrowRight size={15} />
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                        </section>
+                      )}
+
+                      {visibleCategoryEntries.length === 0 &&
+                        visibleDocumentEntries.length === 0 && (
+                          <p className="kb-entry-empty">
+                            当前文档库没有匹配条目，可在下方新建。
+                          </p>
+                        )}
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="kb-nav-grid">

@@ -2478,7 +2478,7 @@ textarea {
 
 .attachment-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 26px 26px;
+  grid-template-columns: minmax(0, 1fr) repeat(3, 26px);
   align-items: center;
   gap: 2px;
   padding: 4px;
@@ -2570,6 +2570,11 @@ textarea {
   background: #e8eee9;
 }
 
+.attachment-icon-btn.is-preview {
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+}
+
 .attachment-icon-btn.is-danger:hover {
   color: var(--danger);
   background: #fdeae7;
@@ -2582,6 +2587,34 @@ textarea {
   background: #0e1512;
   border: 1px solid #33413a;
   border-radius: 7px;
+}
+
+.attachment-preview-head {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 38px 9px 12px;
+  color: #dbe8e2;
+  background: #17231e;
+  border-bottom: 1px solid #33413a;
+}
+
+.attachment-preview-head span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #8ed5c2;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.attachment-preview-head strong {
+  overflow: hidden;
+  font-size: 11px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .attachment-preview audio {

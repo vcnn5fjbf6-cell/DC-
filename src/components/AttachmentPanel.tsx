@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify'
 import {
   Download,
+  Eye,
   File,
   FileSpreadsheet,
   FileText,
@@ -8,6 +9,7 @@ import {
   Image,
   Music,
   Paperclip,
+  Play,
   Trash2,
   Upload,
   X,
@@ -39,6 +41,9 @@ const ACCEPT = [
   '.csv',
   '.txt',
   '.md',
+  '.json',
+  '.xml',
+  '.log',
   '.wps',
   '.et',
   '.dps',
@@ -47,6 +52,7 @@ const ACCEPT = [
   '.jpeg',
   '.gif',
   '.webp',
+  '.bmp',
   '.mp3',
   '.wav',
   '.m4a',
@@ -54,10 +60,13 @@ const ACCEPT = [
   '.flac',
   '.ogg',
   '.opus',
+  '.mpga',
   '.mp4',
   '.mov',
   '.webm',
   '.mkv',
+  '.avi',
+  '.m4v',
 ].join(',')
 
 type FileKind = 'video' | 'image' | 'audio' | 'sheet' | 'doc' | 'file'
@@ -74,6 +83,8 @@ const PREVIEWABLE_DOCUMENTS = new Set([
   'txt',
   'md',
   'json',
+  'xml',
+  'log',
   'et',
 ])
 
@@ -127,6 +138,15 @@ function isPreviewable(meta: AttachmentMeta): boolean {
   return PREVIEWABLE_DOCUMENTS.has(fileExtension(meta.name))
 }
 
+function previewActionLabel(meta: AttachmentMeta): string {
+  const kind = fileKind(meta)
+  if (kind === 'video' || kind === 'audio') return '播放'
+  if (kind === 'image') return '查看图片'
+  if (kind === 'sheet') return '预览表格'
+  if (kind === 'doc') return '预览文档'
+  return '预览'
+}
+
 function escapeHtml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -171,7 +191,7 @@ async function buildDocumentPreview(
     })
     return { type: 'html', html: DOMPurify.sanitize(sections.join('')) }
   }
-  if (['txt', 'md', 'json'].includes(extension)) {
+  if (['txt', 'md', 'json', 'xml', 'log'].includes(extension)) {
     return { type: 'text', text: (await blob.text()).slice(0, 80000) }
   }
   return null
@@ -413,6 +433,17 @@ export function AttachmentPanel({
 
       {selected && canPreview && previewUrl && (
         <div className="attachment-preview">
+          <div className="attachment-preview-head">
+            <span>
+              {selectedKind === 'video' || selectedKind === 'audio' ? (
+                <Play size={12} />
+              ) : (
+                <Eye size={12} />
+              )}
+              {previewActionLabel(selected)}
+            </span>
+            <strong title={selected.name}>{selected.name}</strong>
+          </div>
           {selectedKind === 'video' && (
             <video controls playsInline preload="metadata" src={previewUrl} />
           )}
@@ -466,6 +497,7 @@ export function AttachmentPanel({
         <div className="attachment-list">
           {metas.map((meta) => {
             const previewable = isPreviewable(meta)
+            const actionLabel = previewActionLabel(meta)
             return (
               <div
                 key={meta.id}
@@ -488,6 +520,21 @@ export function AttachmentPanel({
                     </small>
                   </span>
                 </button>
+                {previewable && (
+                  <button
+                    type="button"
+                    className="attachment-icon-btn is-preview"
+                    onClick={() => setSelectedId(meta.id)}
+                    title={actionLabel}
+                    aria-label={actionLabel}
+                  >
+                    {fileKind(meta) === 'video' || fileKind(meta) === 'audio' ? (
+                      <Play size={15} />
+                    ) : (
+                      <Eye size={15} />
+                    )}
+                  </button>
+                )}
                 <button
                   type="button"
                   className="attachment-icon-btn"

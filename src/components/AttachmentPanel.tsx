@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify'
 import {
   Download,
   File,
@@ -60,6 +61,21 @@ const ACCEPT = [
 ].join(',')
 
 type FileKind = 'video' | 'image' | 'audio' | 'sheet' | 'doc' | 'file'
+type DocumentPreview =
+  | { type: 'html'; html: string }
+  | { type: 'text'; text: string }
+
+const PREVIEWABLE_DOCUMENTS = new Set([
+  'pdf',
+  'docx',
+  'xlsx',
+  'xls',
+  'csv',
+  'txt',
+  'md',
+  'json',
+  'et',
+])
 
 function fileExtension(name: string): string {
   return name.includes('.') ? name.split('.').pop()?.toLowerCase() ?? '' : ''
@@ -105,6 +121,62 @@ function fileKind(meta: AttachmentMeta): FileKind {
   return 'file'
 }
 
+function isPreviewable(meta: AttachmentMeta): boolean {
+  const kind = fileKind(meta)
+  if (kind === 'video' || kind === 'image' || kind === 'audio') return true
+  return PREVIEWABLE_DOCUMENTS.has(fileExtension(meta.name))
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+async function buildDocumentPreview(
+  blob: Blob,
+  meta: AttachmentMeta,
+): Promise<DocumentPreview | null> {
+  const extension = fileExtension(meta.name)
+  if (extension === 'docx') {
+    const mammoth = await import('mammoth')
+    const result = await mammoth.convertToHtml({ arrayBuffer: await blob.arrayBuffer() })
+    return { type: 'html', html: DOMPurify.sanitize(result.value) }
+  }
+  if (['xlsx', 'xls', 'csv', 'et'].includes(extension)) {
+    const XLSX = await import('xlsx')
+    const workbook = XLSX.read(new Uint8Array(await blob.arrayBuffer()), {
+      type: 'array',
+    })
+    const sections = workbook.SheetNames.map((sheetName) => {
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[sheetName], {
+        header: 1,
+        defval: '',
+      })
+      const tableRows = rows
+        .slice(0, 300)
+        .map(
+          (row) =>
+            `<tr>${(Array.isArray(row) ? row.slice(0, 40) : [])
+              .map((cell) => `<td>${escapeHtml(String(cell ?? ''))}</td>`)
+              .join('')}</tr>`,
+        )
+        .join('')
+      return `<section class="attachment-sheet-preview"><h4>${escapeHtml(
+        sheetName,
+      )}</h4><div class="attachment-sheet-scroll"><table>${tableRows}</table></div></section>`
+    })
+    return { type: 'html', html: DOMPurify.sanitize(sections.join('')) }
+  }
+  if (['txt', 'md', 'json'].includes(extension)) {
+    return { type: 'text', text: (await blob.text()).slice(0, 80000) }
+  }
+  return null
+}
+
 function formatSize(size: number): string {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${Math.round(size / 1024)} KB`
@@ -127,6 +199,8 @@ export function AttachmentPanel({
   const [metas, setMetas] = useState<AttachmentMeta[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [documentPreview, setDocumentPreview] = useState<DocumentPreview | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -166,30 +240,43 @@ export function AttachmentPanel({
   useEffect(() => {
     if (!selectedId) {
       setPreviewUrl(null)
+      setDocumentPreview(null)
+      setPreviewLoading(false)
+      return
+    }
+    const meta = metas.find((item) => item.id === selectedId)
+    if (!meta) {
+      setSelectedId(null)
       return
     }
     let objectUrl: string | null = null
     let cancelled = false
+    setDocumentPreview(null)
+    setPreviewLoading(true)
     getAttachmentBlob(selectedId)
-      .then((blob) => {
+      .then(async (blob) => {
         if (cancelled) return
         objectUrl = URL.createObjectURL(blob)
         setPreviewUrl(objectUrl)
+        const preview = await buildDocumentPreview(blob, meta)
+        if (!cancelled) setDocumentPreview(preview)
       })
-      .catch(() => setSelectedId(null))
+      .catch(() => {
+        if (!cancelled) setSelectedId(null)
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false)
+      })
     return () => {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [selectedId])
+  }, [selectedId, metas])
 
   const selected = metas.find((meta) => meta.id === selectedId) ?? null
-  const canPreview =
-    selected &&
-    (selected.mime.startsWith('video/') ||
-      selected.mime.startsWith('image/') ||
-      selected.mime.startsWith('audio/') ||
-      selected.mime.includes('pdf'))
+  const selectedKind = selected ? fileKind(selected) : null
+  const selectedExtension = selected ? fileExtension(selected.name) : ''
+  const canPreview = selected ? isPreviewable(selected) : false
 
   const download = async (meta: AttachmentMeta) => {
     try {
@@ -326,18 +413,40 @@ export function AttachmentPanel({
 
       {selected && canPreview && previewUrl && (
         <div className="attachment-preview">
-          {selected.mime.startsWith('video/') && (
-            <video controls preload="metadata" src={previewUrl} />
+          {selectedKind === 'video' && (
+            <video controls playsInline preload="metadata" src={previewUrl} />
           )}
-          {selected.mime.startsWith('image/') && (
+          {selectedKind === 'image' && (
             <img src={previewUrl} alt={selected.name} />
           )}
-          {selected.mime.startsWith('audio/') && (
+          {selectedKind === 'audio' && (
             <audio controls src={previewUrl} />
           )}
-          {selected.mime.includes('pdf') && (
+          {selectedExtension === 'pdf' && (
             <iframe src={previewUrl} title={selected.name} />
           )}
+          {documentPreview?.type === 'html' && (
+            <div
+              className="attachment-document-preview"
+              dangerouslySetInnerHTML={{ __html: documentPreview.html }}
+            />
+          )}
+          {documentPreview?.type === 'text' && (
+            <pre className="attachment-document-preview is-text">
+              {documentPreview.text}
+            </pre>
+          )}
+          {previewLoading && (
+            <div className="attachment-preview-loading">正在生成预览…</div>
+          )}
+          {!previewLoading &&
+            !documentPreview &&
+            !['video', 'image', 'audio'].includes(selectedKind ?? '') &&
+            selectedExtension !== 'pdf' && (
+              <div className="attachment-preview-fallback">
+                该文档格式暂不支持内嵌预览，请下载后查看。
+              </div>
+            )}
           <button
             type="button"
             className="attachment-preview-close"
@@ -356,12 +465,7 @@ export function AttachmentPanel({
       ) : (
         <div className="attachment-list">
           {metas.map((meta) => {
-            const kind = fileKind(meta)
-            const previewable =
-              kind === 'video' ||
-              kind === 'image' ||
-              kind === 'audio' ||
-              meta.mime.includes('pdf')
+            const previewable = isPreviewable(meta)
             return (
               <div
                 key={meta.id}

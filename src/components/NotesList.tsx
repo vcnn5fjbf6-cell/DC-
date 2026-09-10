@@ -1,5 +1,7 @@
 import {
+  ArrowRight,
   BookOpen,
+  Database,
   FilePlus2,
   Filter,
   Search,
@@ -43,6 +45,31 @@ export function NotesList({
     () => notes.filter((note) => !note.id.startsWith('seed-')),
     [notes],
   )
+  const secondLevelLibraries = useMemo(
+    () =>
+      notes
+        .filter(
+          (note) =>
+            note.parentId === 'seed-machine-room' &&
+            (note.id === 'seed-machine-delivery' ||
+              note.id === 'seed-machine-facility'),
+        )
+        .sort((a, b) => {
+          const order = ['seed-machine-delivery', 'seed-machine-facility']
+          return order.indexOf(a.id) - order.indexOf(b.id)
+        }),
+    [notes],
+  )
+  const libraryEntryCounts = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const library of secondLevelLibraries) {
+      counts.set(
+        library.id,
+        notes.filter((note) => note.parentId === library.id).length,
+      )
+    }
+    return counts
+  }, [notes, secondLevelLibraries])
 
   const filtered = useMemo(() => {
     const lower = query.trim().toLocaleLowerCase()
@@ -74,7 +101,7 @@ export function NotesList({
         <div>
           <h1>文档库</h1>
           <p className="heading-sub">
-            这里只展示你实际新建的文档，不包含预置知识库条目。
+            这里展示交付、设施两个二级文档库，以及你实际新建的知识条目。
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => onCreate()}>
@@ -82,6 +109,39 @@ export function NotesList({
           新建条目
         </button>
       </header>
+
+      {secondLevelLibraries.length > 0 && (
+        <section className="notes-library-shelves" aria-label="二级文档库">
+          <div className="notes-library-shelves-head">
+            <div>
+              <h2>二级文档库</h2>
+              <p>从文档库直接进入交付或设施相关分类。</p>
+            </div>
+            <span>{secondLevelLibraries.length} 个分类</span>
+          </div>
+          <div className="kb-nav-grid">
+            {secondLevelLibraries.map((library) => (
+              <button
+                key={library.id}
+                type="button"
+                className="kb-nav-card"
+                onClick={() => onOpen(library.id)}
+              >
+                <span className="kb-nav-card-icon">
+                  <Database size={18} />
+                </span>
+                <span className="kb-nav-card-copy">
+                  <strong>{library.title}</strong>
+                  <small>
+                    {libraryEntryCounts.get(library.id) ?? 0} 个条目
+                  </small>
+                </span>
+                <ArrowRight size={17} />
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section className="filter-toolbar" aria-label="筛选条件">
         <div className="search-box">

@@ -140,8 +140,10 @@ export function NoteEditor({
     [allNotes, note.id],
   )
   const isMachineRoom = note.id === 'seed-machine-room'
+  const isDocumentCategory = note.tags.includes('文档分类')
   const isLibraryLanding =
     note.parentId === 'seed-machine-room' ||
+    isDocumentCategory ||
     (!note.parentId && !isMachineRoom && childNotes.length > 0)
   const isLanding = isMachineRoom || isLibraryLanding
   const landingKind = isLibraryLanding ? '文档条目' : '子知识库'
@@ -275,11 +277,13 @@ export function NoteEditor({
             className="btn btn-primary editor-new-btn"
             onClick={createFromTopbar}
             title={
-              isLibraryLanding
-                ? '在当前文档库新建文档条目'
-                : isLanding
-                  ? '新建子知识库'
-                  : '新建知识条目'
+              isDocumentCategory
+                ? '在当前分类新建文档条目'
+                : isLibraryLanding
+                  ? '在当前文档库新建文档条目'
+                  : isLanding
+                    ? '新建子知识库'
+                    : '新建知识条目'
             }
           >
             <FilePlus2 size={16} />
@@ -347,7 +351,13 @@ export function NoteEditor({
                   <Database size={20} />
                 </span>
                 <div>
-                  <p>{isLibraryLanding ? '文档库' : '知识分类'}</p>
+                  <p>
+                    {isDocumentCategory
+                      ? '文档分类'
+                      : isLibraryLanding
+                        ? '文档库'
+                        : '知识分类'}
+                  </p>
                   <h1>{landingTitle}</h1>
                 </div>
               </header>
@@ -435,11 +445,13 @@ export function NoteEditor({
                   <div>
                     <strong>新建{landingKind}</strong>
                     <small>
-                      {isLibraryLanding
-                        ? '新条目会归入当前文档库，留空自动命名'
-                        : note.parentId
-                          ? '新的三级条目'
-                          : '新的机房运维分类'}
+                      {isDocumentCategory
+                        ? '新条目会归入当前分类，留空自动命名'
+                        : isLibraryLanding
+                          ? '新条目会归入当前文档库，留空自动命名'
+                          : note.parentId
+                            ? '新的三级条目'
+                            : '新的机房运维分类'}
                     </small>
                   </div>
                 </div>

@@ -6,6 +6,7 @@ import { domains } from './data/domains'
 import { clearAttachmentFiles, deleteAttachmentsForNote } from './lib/fileStore'
 import type { DomainId, Note } from './types'
 import { nowIso, uid } from './lib/notes'
+import { AiAssistant } from './components/AiAssistant'
 import { CommandSearch } from './components/CommandSearch'
 import { Home } from './components/Home'
 import { NoteEditor } from './components/NoteEditor'
@@ -253,6 +254,9 @@ export default function App() {
             onCreate={createNote}
           />
         )
+        break
+      case 'ai':
+        content = <AiAssistant notes={renderedImports} onOpen={openNote} />
         break
       case 'settings':
         content = (

@@ -5,6 +5,7 @@ import {
   FileText,
   Film,
   Image,
+  Music,
   Paperclip,
   Trash2,
   Upload,
@@ -19,9 +20,10 @@ import {
   saveAttachmentFile,
 } from '../lib/fileStore'
 import {
-  extractFileText,
-  generateStructuredAttachmentContent,
-} from '../lib/aiExtract'
+  generateAttachmentContent,
+  mediaKind,
+  prepareMediaAudio,
+} from '../lib/mediaAi'
 import { relativeTime, uid } from '../lib/notes'
 
 const MAX_FILE_SIZE = 512 * 1024 * 1024
@@ -44,13 +46,20 @@ const ACCEPT = [
   '.jpeg',
   '.gif',
   '.webp',
+  '.mp3',
+  '.wav',
+  '.m4a',
+  '.aac',
+  '.flac',
+  '.ogg',
+  '.opus',
   '.mp4',
   '.mov',
   '.webm',
   '.mkv',
 ].join(',')
 
-type FileKind = 'video' | 'image' | 'sheet' | 'doc' | 'file'
+type FileKind = 'video' | 'image' | 'audio' | 'sheet' | 'doc' | 'file'
 
 function fileExtension(name: string): string {
   return name.includes('.') ? name.split('.').pop()?.toLowerCase() ?? '' : ''
@@ -58,10 +67,22 @@ function fileExtension(name: string): string {
 
 function fileKind(meta: AttachmentMeta): FileKind {
   const extension = fileExtension(meta.name)
-  if (meta.mime.startsWith('video/') || ['mp4', 'mov', 'webm', 'mkv'].includes(extension)) {
+  if (
+    meta.mime.startsWith('video/') ||
+    ['mp4', 'mov', 'webm', 'mkv', 'avi', 'm4v'].includes(extension)
+  ) {
     return 'video'
   }
-  if (meta.mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(extension)) {
+  if (
+    meta.mime.startsWith('audio/') ||
+    ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg', 'opus', 'mpga'].includes(extension)
+  ) {
+    return 'audio'
+  }
+  if (
+    meta.mime.startsWith('image/') ||
+    ['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp'].includes(extension)
+  ) {
     return 'image'
   }
   if (
@@ -109,6 +130,7 @@ export function AttachmentPanel({
   const [uploading, setUploading] = useState(false)
   const [extracting, setExtracting] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [status, setStatus] = useState('')
 
   useEffect(() => {
     if (uploadRef) {
@@ -166,6 +188,7 @@ export function AttachmentPanel({
     selected &&
     (selected.mime.startsWith('video/') ||
       selected.mime.startsWith('image/') ||
+      selected.mime.startsWith('audio/') ||
       selected.mime.includes('pdf'))
 
   const download = async (meta: AttachmentMeta) => {
@@ -194,6 +217,9 @@ export function AttachmentPanel({
     }
     setUploading(true)
     setExtracting(false)
+    setStatus('')
+    // 在用户上传手势内同步启动需要实时解码的视频音频捕获。
+    const prepared = files.map((file) => prepareMediaAudio(file))
     const created = files.map<AttachmentMeta>((file) => ({
       id: uid('file'),
       noteId,
@@ -214,17 +240,29 @@ export function AttachmentPanel({
       )
       setExtracting(true)
       const generated: string[] = []
+      const skipped: string[] = []
       for (let index = 0; index < files.length; index += 1) {
-        const content = await extractFileText(files[index])
-        if (!content.trim()) continue
-        const result = await generateStructuredAttachmentContent(
-          files[index].name,
-          content,
-        )
-        if (result.text) generated.push(result.text)
+        const text = await generateAttachmentContent(files[index], prepared[index])
+        if (text) {
+          generated.push(text)
+        } else {
+          const kind = mediaKind(files[index])
+          if (kind === 'video' || kind === 'audio' || kind === 'image') {
+            skipped.push(files[index].name)
+          }
+        }
       }
       if (generated.length > 0) {
         onContentGenerated?.(generated.join('\n\n'))
+      }
+      if (skipped.length > 0) {
+        setStatus(
+          generated.length > 0
+            ? `已识别 ${generated.length} 个附件；另有 ${skipped.length} 个媒体未识别，请在“数据与设置”中配置 AI。`
+            : '媒体文件未能识别，请先在“数据与设置”中启用并配置 AI。',
+        )
+      } else if (generated.length > 0) {
+        setStatus(`已智能识别 ${generated.length} 个附件内容。`)
       }
     } catch {
       window.alert('上传失败，请检查浏览器存储权限后重试。')
@@ -251,6 +289,7 @@ export function AttachmentPanel({
     const className = `attachment-kind is-${kind}`
     if (kind === 'video') return <Film size={18} className={className} />
     if (kind === 'image') return <Image size={18} className={className} />
+    if (kind === 'audio') return <Music size={18} className={className} />
     if (kind === 'sheet') return <FileSpreadsheet size={18} className={className} />
     if (kind === 'doc') return <FileText size={18} className={className} />
     return <File size={18} className={className} />
@@ -269,12 +308,13 @@ export function AttachmentPanel({
           className="attachment-upload-btn"
           onClick={() => inputRef.current?.click()}
           disabled={uploading || extracting}
-          title="上传文档、表格、图片或视频"
+          title="上传文档、表格、图片、音频或视频"
         >
           <Upload size={14} />
           {extracting ? '智能读取中' : uploading ? '上传中' : '上传'}
         </button>
       </div>
+      {status && <p className="attachment-status">{status}</p>}
       <input
         ref={inputRef}
         type="file"
@@ -291,6 +331,9 @@ export function AttachmentPanel({
           )}
           {selected.mime.startsWith('image/') && (
             <img src={previewUrl} alt={selected.name} />
+          )}
+          {selected.mime.startsWith('audio/') && (
+            <audio controls src={previewUrl} />
           )}
           {selected.mime.includes('pdf') && (
             <iframe src={previewUrl} title={selected.name} />
@@ -314,7 +357,11 @@ export function AttachmentPanel({
         <div className="attachment-list">
           {metas.map((meta) => {
             const kind = fileKind(meta)
-            const previewable = kind === 'video' || kind === 'image' || meta.mime.includes('pdf')
+            const previewable =
+              kind === 'video' ||
+              kind === 'image' ||
+              kind === 'audio' ||
+              meta.mime.includes('pdf')
             return (
               <div
                 key={meta.id}

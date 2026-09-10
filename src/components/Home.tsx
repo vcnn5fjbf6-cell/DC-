@@ -40,7 +40,7 @@ export function Home({
   return (
     <div className="page home-v2">
       <header className="page-heading home-v2-heading">
-        <div>
+        <div className="home-v2-heading-copy">
           <p className="eyebrow">内部知识平台</p>
           <h1>内部知识库</h1>
           <p className="heading-sub">
@@ -48,7 +48,7 @@ export function Home({
           </p>
         </div>
         <div className="home-v2-actions">
-          <button className="btn" onClick={() => machine && onOpen(machine.id)}>
+          <button className="btn btn-hero-ghost" onClick={() => machine && onOpen(machine.id)}>
             <Upload size={17} />
             进入机房运维
           </button>
@@ -59,90 +59,88 @@ export function Home({
         </div>
       </header>
 
-      <div className="home-v2-grid">
-        <section className="home-v2-directory">
-          <div className="home-v2-section-head">
-            <div>
-              <h2>知识库目录</h2>
-              <p>当前只保留内部知识库，按机房运维组织内容。</p>
-            </div>
-            <span>{notes.length} 条文档</span>
+      <section className="home-v2-stats" aria-label="知识库概况">
+        <div className="home-v2-summary">
+          <span className="home-v2-summary-icon">
+            <Database size={19} />
+          </span>
+          <div>
+            <strong>内部知识库</strong>
+            <small>唯一知识领域</small>
           </div>
+        </div>
+        <div className="home-v2-summary">
+          <span className="home-v2-summary-icon amber">
+            <FolderOpen size={19} />
+          </span>
+          <div>
+            <strong>{subLibraries.length} 个子知识库</strong>
+            <small>交付与设施</small>
+          </div>
+        </div>
+        <div className="home-v2-summary">
+          <span className="home-v2-summary-icon blue">
+            <BookOpen size={19} />
+          </span>
+          <div>
+            <strong>{notes.length} 条文档</strong>
+            <small>当前全部内容</small>
+          </div>
+        </div>
+      </section>
 
-          {machine && (
+      <section className="home-v2-directory">
+        <div className="home-v2-section-head">
+          <div>
+            <h2>知识库目录</h2>
+            <p>当前只保留内部知识库，按机房运维组织内容。</p>
+          </div>
+          <span>{notes.length} 条文档</span>
+        </div>
+
+        {machine && (
+          <button
+            type="button"
+            className="home-v2-main-card"
+            onClick={() => onOpen(machine.id)}
+          >
+            <span className="home-v2-main-icon">
+              <Server size={26} />
+            </span>
+            <span className="home-v2-main-copy">
+              <strong>机房运维</strong>
+              <small>
+                {subLibraries.length} 个子知识库 · 运维资料统一入口
+              </small>
+            </span>
+            <span className="home-v2-card-action">
+              打开
+              <ArrowRight size={16} />
+            </span>
+          </button>
+        )}
+
+        <div className="home-v2-sub-list">
+          {subLibraries.map((note) => (
             <button
+              key={note.id}
               type="button"
-              className="home-v2-main-card"
-              onClick={() => onOpen(machine.id)}
+              onClick={() => onOpen(note.id)}
             >
-              <span className="home-v2-main-icon">
-                <Server size={26} />
+              <span className="home-v2-sub-icon">
+                <FolderOpen size={18} />
               </span>
-              <span className="home-v2-main-copy">
-                <strong>机房运维</strong>
+              <span>
+                <strong>{note.title}</strong>
                 <small>
-                  {subLibraries.length} 个子知识库 · 运维资料统一入口
+                  {note.tags.slice(0, 2).join(' / ') || '内部知识库'}
                 </small>
               </span>
-              <span className="home-v2-card-action">
-                打开
-                <ArrowRight size={16} />
-              </span>
+              <ArrowRight size={16} />
             </button>
-          )}
-
-          <div className="home-v2-sub-list">
-            {subLibraries.map((note) => (
-              <button
-                key={note.id}
-                type="button"
-                onClick={() => onOpen(note.id)}
-              >
-                <span className="home-v2-sub-icon">
-                  <FolderOpen size={18} />
-                </span>
-                <span>
-                  <strong>{note.title}</strong>
-                  <small>
-                    {note.tags.slice(0, 2).join(' / ') || '内部知识库'}
-                  </small>
-                </span>
-                <ArrowRight size={16} />
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <aside className="home-v2-side">
-          <div className="home-v2-summary">
-            <span className="home-v2-summary-icon">
-              <Database size={18} />
-            </span>
-            <div>
-              <strong>内部知识库</strong>
-              <small>唯一知识领域</small>
-            </div>
-          </div>
-          <div className="home-v2-summary">
-            <span className="home-v2-summary-icon amber">
-              <FolderOpen size={18} />
-            </span>
-            <div>
-              <strong>{subLibraries.length} 个子知识库</strong>
-              <small>交付与设施</small>
-            </div>
-          </div>
-          <div className="home-v2-summary">
-            <span className="home-v2-summary-icon blue">
-              <BookOpen size={18} />
-            </span>
-            <div>
-              <strong>{notes.length} 条文档</strong>
-              <small>当前全部内容</small>
-            </div>
-          </div>
-        </aside>
-      </div>
+          ))}
+        </div>
+      </section>
 
       <section className="home-v2-recent">
         <div className="home-v2-section-head">

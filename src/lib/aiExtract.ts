@@ -5,6 +5,10 @@ export interface AiSettings {
   apiKey: string
   model: string
   enabled: boolean
+  asrEndpoint: string
+  asrApiKey: string
+  asrModel: string
+  asrEnabled: boolean
 }
 
 export function defaultAiSettings(): AiSettings {
@@ -13,6 +17,10 @@ export function defaultAiSettings(): AiSettings {
     apiKey: '',
     model: 'gpt-4o-mini',
     enabled: false,
+    asrEndpoint: 'https://api.openai.com/v1/audio/transcriptions',
+    asrApiKey: '',
+    asrModel: 'whisper-1',
+    asrEnabled: false,
   }
 }
 
@@ -258,7 +266,7 @@ async function structureWithAi(
         {
           role: 'system',
           content:
-            '你是企业知识库结构化整理助手。只输出文档标题和两个部分，其余内容一律不输出：\n**文档标题**\n\n### 操作步骤\n**1. 一级标题**\n- 操作内容\n**1.1 二级标题**\n- 操作内容\n\n### 备注\n- 备注、注意事项、避免事项、参照内容\n\n删除页眉页脚、水印、页码、模板说明、联系方式、元信息、要求、完成标准和无关内容。没有操作步骤或备注的分节不要输出，不输出开场白。',
+            '你是企业知识库结构化整理助手。只提取重点操作步骤和每一步对应的备注，不输出摘要、执行情况或表格说明。\n\n只输出以下格式：\n**文档标题**\n\n### 操作步骤\n1. **接收工单**：客服发送工单及客服邮件。备注：无工单需后续补齐。\n2.1 **系统确认**：确认机柜归属并打印申请内容。备注：打印现场核实确认。\n\n规则：保留步骤编号、步骤名称和操作内容；将备注列及正文中的备注、注意、风险、参照、禁止、避免事项合并到对应步骤同一行；删除页眉页脚、水印、页码、元信息、执行情况、是/否、完成标准、图片信息；不要输出独立的备注分区或代码围栏；不要编造内容。',
         },
         {
           role: 'user',
@@ -322,11 +330,21 @@ function parseStepCandidate(line: string): string | null {
       if (/^(序号|步骤|操作|动作|流程|负责人|时间|备注|操作内容)$/i.test(first)) {
         return null
       }
-      if (/^[一二三四五六七八九十\d]+$/.test(first)) {
-        const action = cells
+      if (/^(?:[一二三四五六七八九十]+|\d+(?:\.\d+)*)$/u.test(first)) {
+        const ignoredCell =
+          /^(是|否|已完成|未完成|执行情况|图片信息|通过|未通过|负责人|时间|备注)$/iu
+        const parts = cells
           .slice(1)
-          .find((cell) => !/^(负责人|时间|备注)$/.test(cell) && cell.length > 1)
-        if (action) return action
+          .filter((cell) => cell && !ignoredCell.test(cell))
+        const name = parts.shift()?.trim() ?? ''
+        const rest = parts.join('；')
+        const { content, remark } = splitTableRemark(rest)
+        if (name) {
+          const serial = first.includes('.') ? first : `${first}.`
+          return `${serial} ${name}${content ? `：${content}` : ''}${
+            remark ? `。备注：${remark}` : ''
+          }`
+        }
       }
       const body = cells.join('；')
       if (/步骤|操作|执行|检查|确认|登记/.test(body) && first.length <= 8) {
@@ -353,6 +371,17 @@ function parseStepCandidate(line: string): string | null {
     return body
   }
   return null
+}
+
+function splitTableRemark(text: string): { content: string; remark: string } {
+  const value = text.trim()
+  if (!value) return { content: '', remark: '' }
+  const match = value.match(/(?:^|[；;。]\s*)(备注|注|注意|风险提示|说明)[：:]\s*(.+)$/u)
+  if (!match || match.index === undefined) return { content: value, remark: '' }
+  return {
+    content: value.slice(0, match.index).trim(),
+    remark: value.slice(match.index).replace(/^[；;。]\s*/u, '').replace(/^(备注|注|注意|风险提示|说明)[：:]\s*/u, '').trim(),
+  }
 }
 
 function isStepSectionHeading(line: string): boolean {
@@ -445,7 +474,8 @@ function buildHierarchicalContent(content: string): string | null {
 }
 
 function localStructuredContent(fileName: string, content: string): string {
-  const hierarchical = buildHierarchicalContent(content)
+  const hasTabularRows = content.split(/\r?\n/).some((line) => line.includes('\t'))
+  const hierarchical = hasTabularRows ? null : buildHierarchicalContent(content)
   if (hierarchical) return hierarchical
 
   const lines = content
@@ -512,7 +542,11 @@ function localStructuredContent(fileName: string, content: string): string {
     operationSteps.length > 0
       ? `### 操作步骤\n\n${operationSteps
           .slice(0, 30)
-          .map((step, index) => `${index + 1}. ${step}`)
+          .map((step, index) =>
+            /^(?:\d+(?:\.\d+)*|[一二三四五六七八九十]+)[.、．]?\s/u.test(step)
+              ? step
+              : `${index + 1}. ${step}`,
+          )
           .join('\n')}`
       : ''
   const remarkItems = polished.filter((item) => isRemarkContent(item)).slice(0, 30)
@@ -535,7 +569,7 @@ export async function generateStructuredAttachmentContent(
 
   try {
     const controller = new AbortController()
-    const timer = window.setTimeout(() => controller.abort(), 180000)
+    const timer = window.setTimeout(() => controller.abort(), 300000)
     const response = await fetch('http://127.0.0.1:5188/extract', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

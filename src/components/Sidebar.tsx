@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Bot,
   Database,
   LayoutDashboard,
   Search,
@@ -8,7 +9,7 @@ import {
 import { Fragment } from 'react'
 import type { Note } from '../types'
 
-export type ViewId = 'home' | 'notes' | 'settings'
+export type ViewId = 'home' | 'notes' | 'ai' | 'settings'
 
 const primaryItems: Array<{
   id: ViewId
@@ -17,6 +18,7 @@ const primaryItems: Array<{
 }> = [
   { id: 'home', label: '首页', icon: LayoutDashboard },
   { id: 'notes', label: '文档库', icon: BookOpen },
+  { id: 'ai', label: 'AI 助手', icon: Bot },
   { id: 'settings', label: '数据设置', icon: Database },
 ]
 

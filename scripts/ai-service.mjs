@@ -353,6 +353,10 @@ const EXTRACT_SCHEMA = {
         type: 'object',
         additionalProperties: false,
         properties: {
+          section: {
+            type: 'string',
+            description: '业务分类或阶段分区标题，例如准备、确认、实施、验收',
+          },
           number: { type: 'string', description: '原步骤编号，没有编号时留空' },
           name: { type: 'string', description: '简短步骤名称' },
           action: { type: 'string', description: '从原文提取的完整操作内容' },
@@ -361,7 +365,7 @@ const EXTRACT_SCHEMA = {
             description: '对应备注、注意、风险或参照信息，没有时留空',
           },
         },
-        required: ['number', 'name', 'action', 'remark'],
+        required: ['section', 'number', 'name', 'action', 'remark'],
       },
     },
   },
@@ -369,7 +373,7 @@ const EXTRACT_SCHEMA = {
 }
 
 const EXTRACT_SYSTEM =
-  '你是企业知识库结构化整理助手。请从附件中逐条提取重点操作步骤和对应备注，并只输出符合给定 JSON Schema 的 JSON。\n\n规则：\n1. steps 数组必须严格按原文档从上到下、从左到右的阅读顺序排列，禁止按重要性、层级或内容相似度重排，禁止调换步骤顺序。\n2. 每个步骤分别填写 number、name、action、remark：number 保留原编号；name 是最短且明确的步骤名称；action 是该步骤完整、可执行的操作内容；remark 只放对应的备注、注意、风险、禁止或参照信息。没有内容的字段填空字符串。\n3. 细化提取：一个步骤中有多个关键操作时，按原文顺序完整写入 action，不要概括丢失；同一行或同一单元格中的备注、注意或风险内容必须归入对应步骤的 remark，用于补全步骤语义，但最终展示时不得出现“备注”字样，也不得生成独立备注区。\n4. 表格中的“操作步骤/步骤名称/动作”是步骤名，“操作内容/实施内容/说明”是操作内容，“备注/注意事项/风险”是对应备注。\n5. 自动润色：删除重复词、口水话、乱码、错误换行和无效空行，合并同一操作或同一补充信息，统一标点、句式和专业表达；不得改变事实、数字、日期、步骤编号、步骤顺序或专有名词。\n6. 删除页眉页脚、水印、页码、文件编号、版本、编制人、审核人、联系方式、模板说明、完成标准、执行情况、是/否、图片信息等噪声；不要把执行状态误当成备注。\n7. 不编造原文没有的内容；最终正文要清晰、简洁、专业，不要输出 Markdown 解释、开场白、结束语或代码围栏。'
+  '你是企业知识库结构化整理助手。请从附件中逐条提取重点操作步骤和对应备注，并只输出符合给定 JSON Schema 的 JSON。\n\n规则：\n1. steps 数组必须严格按原文档从上到下、从左到右的阅读顺序排列，禁止按重要性、层级或内容相似度重排，禁止调换步骤顺序。\n2. 每个步骤分别填写 section、number、name、action、remark：section 是按业务流程归类的清晰分区标题，使用 2–12 字的短语，同一类步骤必须使用完全相同的 section；number 保留原编号；name 是最短且明确的步骤名称；action 是该步骤完整、可执行的操作内容；remark 只放对应的备注、注意、风险、禁止或参照信息。没有内容的字段填空字符串。\n3. 分类分段：按原文档语义把步骤归入 2–8 个清晰分区，例如“准备与接收”“信息确认”“实施上架”“检查验收”；分区顺序必须符合业务流程，不许为了分类而调换步骤顺序或编造类别。\n4. 细化提取：一个步骤中有多个关键操作时，按原文顺序完整写入 action，不要概括丢失；同一行或同一单元格中的备注、注意或风险内容必须归入对应步骤的 remark，用于补全步骤语义，但最终展示时不得出现“备注”字样，也不得生成独立备注区。\n5. 表格中的“操作步骤/步骤名称/动作”是步骤名，“操作内容/实施内容/说明”是操作内容，“备注/注意事项/风险”是对应备注。\n6. 自动润色：删除重复词、口水话、乱码、错误换行和无效空行，合并同一操作或同一补充信息，统一标点、句式和专业表达；不得改变事实、数字、日期、步骤编号、步骤顺序或专有名词。\n7. 删除页眉页脚、水印、页码、文件编号、版本、编制人、审核人、联系方式、模板说明、完成标准、执行情况、是/否、图片信息等噪声；不要把执行状态误当成备注。\n8. 不编造原文没有的内容；最终正文要清晰、简洁、专业，不要输出 Markdown 解释、开场白、结束语或代码围栏。'
 
 function splitExtractRemark(value) {
   const text = String(value ?? '').trim()
@@ -433,7 +437,17 @@ function cleanExtractDetail(value, stepName = '') {
   return fragments.join('；')
 }
 
-function mergeExtractDetails(...values) {
+function detailsAreSimilar(left, right) {
+  if (!left || !right) return false
+  if (left.includes(right) || right.includes(left)) return true
+  if (Math.min(left.length, right.length) < 6) return false
+  const leftChars = new Set([...left])
+  const rightChars = new Set([...right])
+  const overlap = [...leftChars].filter((char) => rightChars.has(char)).length
+  return overlap / Math.min(leftChars.size, rightChars.size) >= 0.7
+}
+
+function uniqueExtractDetailItems(...values) {
   const fragments = []
   for (const value of values) {
     String(value ?? '')
@@ -446,8 +460,8 @@ function mergeExtractDetails(...values) {
   for (const fragment of fragments) {
     const compact = fragment.replace(/[\s。；;、，,.!?！？]/gu, '')
     if (!compact) continue
-    const matchedIndex = unique.findIndex(
-      (item) => item.compact.includes(compact) || compact.includes(item.compact),
+    const matchedIndex = unique.findIndex((item) =>
+      detailsAreSimilar(item.compact, compact),
     )
     if (matchedIndex < 0) {
       unique.push({ text: fragment, compact })
@@ -457,7 +471,11 @@ function mergeExtractDetails(...values) {
       unique[matchedIndex] = { text: fragment, compact }
     }
   }
-  return unique.map((item) => item.text).join('；')
+  return unique.map((item) => item.text)
+}
+
+function mergeExtractDetails(...values) {
+  return uniqueExtractDetailItems(...values).join('；')
 }
 
 function compactStepName(value) {
@@ -517,11 +535,17 @@ function normalizeExtractStep(step, index) {
   remark = remark.replace(/^(备注|注|注意|风险提示|说明)[：:]\s*/u, '').trim()
   if (!remark && split.remark) remark = split.remark
   remark = cleanExtractDetail(remark, name)
+  const section = String(step?.section ?? '')
+    .replace(/^[#*\s]+|\s*[#*]+$/gu, '')
+    .replace(/^\d+(?:\.\d+)*[.、．:：-]?\s*/u, '')
+    .trim()
+    .slice(0, 40)
   const number = cleanStepNumber(step?.number)
   const compactName = compactStepName(name)
   const compactAction = compactStepName(action)
   const normalizedAction = compactAction && compactAction !== compactName ? action : ''
   return {
+    section,
     number,
     name: name || action || `步骤${index + 1}`,
     action: normalizedAction,
@@ -571,24 +595,6 @@ function ensureSentence(value) {
   return /[。！？.!?；;]$/u.test(text) ? text : `${text}。`
 }
 
-function formatExtractStep(step, index) {
-  const number = step.number || String(index + 1)
-  const prefix = number.includes('.') ? number : `${number}.`
-  const details = [step.action, step.remark]
-    .map((value) => String(value ?? '').trim())
-    .filter(Boolean)
-    .filter(
-      (value, valueIndex, values) =>
-        !values.some(
-          (other, otherIndex) =>
-            otherIndex < valueIndex &&
-            (other.includes(value) || value.includes(other)),
-        ),
-    )
-  const detail = details.map(ensureSentence).join('')
-  return `${prefix} **${step.name}**${detail ? `：${detail}` : ''}`
-}
-
 function parseExtractPayload(value) {
   const text = cleanModelOutput(value)
   const candidates = [text]
@@ -623,13 +629,47 @@ function formatExtractPayload(payload, content, fallbackTitle = '') {
     parsedTitle && !/^(?:文档|附件|未知文档)$/u.test(parsedTitle)
       ? parsedTitle
       : fallbackTitle.replace(/\.[^.]+$/u, '').trim() || parsedTitle || '文档'
-  return [
-    `**${title}**`,
-    '',
-    '### 操作步骤',
-    '',
-    ...ordered.map(formatExtractStep),
-  ].join('\n')
+  const groups = []
+  for (const step of ordered) {
+    const section = step.section || ''
+    let group = groups.find((item) => item.section === section)
+    if (!group) {
+      group = { section, steps: [] }
+      groups.push(group)
+    }
+    group.steps.push(step)
+  }
+  const lines = [`**${title}**`, '', '## 操作流程', '']
+  groups.forEach((group) => {
+    const onlyStep = group.steps.length === 1 ? group.steps[0] : null
+    const sectionIsStepName =
+      Boolean(group.section) &&
+      onlyStep !== null &&
+      compactStepName(group.section) === compactStepName(onlyStep.name)
+    if (group.section && !sectionIsStepName) lines.push(`### ${group.section}`, '')
+    const emittedDetails = []
+    group.steps.forEach((step) => {
+      const number = step.number
+      const heading = [number, step.name].filter(Boolean).join(' ')
+      const level = group.section && !sectionIsStepName ? '####' : '###'
+      lines.push(`${level} ${heading}`, '')
+      const details = uniqueExtractDetailItems(step.action, step.remark).filter(
+        (detail) => {
+          const compact = detail.replace(/[\s。；;、，,.!?！？]/gu, '')
+          if (!compact) return false
+          if (emittedDetails.some((item) => detailsAreSimilar(item, compact))) {
+            return false
+          }
+          emittedDetails.push(compact)
+          return true
+        },
+      )
+      if (details.length > 0) {
+        lines.push(...details.map((detail) => `- ${ensureSentence(detail)}`), '')
+      }
+    })
+  })
+  return lines.join('\n').trim()
 }
 
 const ASK_SYSTEM =

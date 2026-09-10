@@ -12,7 +12,7 @@ const CODEX_BIN = process.env.CODEX_BIN ?? '/usr/local/bin/codex'
 const DIRECT_FALLBACK_BASE_URL =
   process.env.ALLKNOW_AI_DIRECT_BASE_URL ?? 'https://api.deepseek.com'
 const DIRECT_FALLBACK_MODEL =
-  process.env.ALLKNOW_AI_DIRECT_MODEL ?? 'deepseek-v4-flash'
+  process.env.ALLKNOW_AI_DIRECT_MODEL ?? 'deepseek-chat'
 
 function setCors(res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -258,6 +258,7 @@ async function requestChatCompletions({
   user,
   maxTokens,
   temperature,
+  responseFormat = null,
 }) {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), LOCAL_SERVICE_TIMEOUT)
@@ -274,6 +275,7 @@ async function requestChatCompletions({
         model: provider.model,
         temperature,
         max_tokens: maxTokens,
+        ...(responseFormat ? { response_format: responseFormat } : {}),
         messages: [
           { role: 'system', content: system },
           { role: 'user', content: user },
@@ -294,7 +296,13 @@ async function requestChatCompletions({
   }
 }
 
-async function chatCompletions({ system, user, maxTokens = 5000, temperature = 0.3 }) {
+async function chatCompletions({
+  system,
+  user,
+  maxTokens = 5000,
+  temperature = 0.3,
+  responseFormat = null,
+}) {
   if (!providerReady()) {
     throw new Error('未检测到本机 AI 配置（~/.codex/config.toml）')
   }
@@ -311,6 +319,7 @@ async function chatCompletions({ system, user, maxTokens = 5000, temperature = 0
         user,
         maxTokens: budget,
         temperature,
+        responseFormat,
       })
       if (result.content) return result.content
       lastError = new Error('AI 未返回内容')
@@ -536,7 +545,9 @@ async function handleExtract(req, res) {
     result = await chatCompletions({
       system: EXTRACT_SYSTEM,
       user,
-      maxTokens: 16000,
+      maxTokens: 6000,
+      temperature: 0,
+      responseFormat: { type: 'json_object' },
     })
     source = provider.source === 'deepseek-direct' ? 'deepseek-direct' : 'ai'
   }

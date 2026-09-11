@@ -5654,6 +5654,87 @@ select {
   text-align: center;
 }
 
+/* ---------- 首页 AI 助手 ---------- */
+.home-ai-panel {
+  margin-bottom: 18px;
+  padding: 20px;
+  background:
+    linear-gradient(120deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.025) 62%),
+    #fff;
+  border: 1px solid #e1e2f8;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.home-ai-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.home-ai-panel-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.home-ai-panel-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border-radius: 13px;
+  box-shadow: 0 8px 18px rgba(99, 102, 241, 0.24);
+}
+
+.home-ai-panel-title div {
+  min-width: 0;
+}
+
+.home-ai-panel-title p {
+  margin: 0 0 1px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.home-ai-panel-title h2 {
+  margin: 0;
+  font-size: 21px;
+  letter-spacing: -0.02em;
+}
+
+.home-ai-panel-title small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.ai-chat-embedded {
+  height: 420px;
+  min-height: 420px;
+  max-height: 480px;
+  border-radius: 14px;
+  box-shadow: none;
+}
+
+.home-ai-panel .ai-chat-body {
+  gap: 14px;
+  padding: 18px 20px;
+}
+
+.home-ai-panel .ai-suggestions {
+  padding: 0 20px 12px;
+}
+
 @media (max-width: 860px) {
   .kb-category-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5663,6 +5744,25 @@ select {
     align-items: flex-start;
     flex-direction: column;
     gap: 5px;
+  }
+
+  .home-ai-panel {
+    padding: 16px;
+  }
+
+  .home-ai-panel-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .home-ai-panel-head > .btn {
+    align-self: flex-start;
+  }
+
+  .ai-chat-embedded {
+    height: 400px;
+    min-height: 400px;
+    max-height: 440px;
   }
 
   .ai-chat {

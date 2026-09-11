@@ -10,6 +10,7 @@ import {
 import { useMemo } from 'react'
 import type { Note } from '../types'
 import { relativeTime, sortByUpdated } from '../lib/notes'
+import { AiAssistant } from './AiAssistant'
 
 export function Home({
   notes,
@@ -88,6 +89,8 @@ export function Home({
           </div>
         </div>
       </section>
+
+      <AiAssistant notes={notes} onOpen={onOpen} embedded />
 
       <section className="home-v2-directory">
         <div className="home-v2-section-head">

@@ -149,18 +149,22 @@ async function askCloud(question: string, context: string): Promise<string> {
 export function AiAssistant({
   notes,
   onOpen,
+  embedded = false,
 }: {
   notes: Note[]
   onOpen: (id: string) => void
+  embedded?: boolean
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([WELCOME])
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const sortedNotes = useMemo(() => sortByUpdated(notes), [notes])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const body = bodyRef.current
+    if (!body) return
+    body.scrollTo({ top: body.scrollHeight, behavior: 'smooth' })
   }, [messages, busy])
 
   const ask = async (questionRaw: string) => {
@@ -195,30 +199,50 @@ export function AiAssistant({
   const renderAnswer = (text: string) =>
     renderMarkdown(text, () => undefined)
 
-  return (
-    <div className="page ai-page">
-      <header className="page-heading ai-heading">
-        <div>
-          <p className="eyebrow">AI 智能助手</p>
-          <h1>问知识库</h1>
-          <p className="heading-sub">
-            基于内部知识自动检索与回答，支持追问流程、规范与运维经验。
-          </p>
-        </div>
-        <button
-          type="button"
-          className="btn"
-          onClick={clearChat}
-          disabled={busy}
-          title="清空对话"
-        >
-          <Eraser size={16} />
-          清空对话
-        </button>
-      </header>
+  const clearButton = (
+    <button
+      type="button"
+      className="btn"
+      onClick={clearChat}
+      disabled={busy}
+      title="清空对话"
+    >
+      <Eraser size={16} />
+      清空对话
+    </button>
+  )
 
-      <section className="ai-chat">
-        <div className="ai-chat-body" aria-live="polite">
+  return (
+    <div className={embedded ? 'home-ai-panel' : 'page ai-page'}>
+      {embedded ? (
+        <header className="home-ai-panel-head">
+          <div className="home-ai-panel-title">
+            <span className="home-ai-panel-icon">
+              <Bot size={18} />
+            </span>
+            <div>
+              <p>AI 智能助手</p>
+              <h2>问知识库</h2>
+              <small>基于内部知识自动检索与回答，支持追问流程、规范与运维经验。</small>
+            </div>
+          </div>
+          {clearButton}
+        </header>
+      ) : (
+        <header className="page-heading ai-heading">
+          <div>
+            <p className="eyebrow">AI 智能助手</p>
+            <h1>问知识库</h1>
+            <p className="heading-sub">
+              基于内部知识自动检索与回答，支持追问流程、规范与运维经验。
+            </p>
+          </div>
+          {clearButton}
+        </header>
+      )}
+
+      <section className={`ai-chat ${embedded ? 'ai-chat-embedded' : ''}`}>
+        <div ref={bodyRef} className="ai-chat-body" aria-live="polite">
           {messages.map((message, index) => (
             <div
               key={`${message.role}-${index}`}
@@ -269,7 +293,6 @@ export function AiAssistant({
               </div>
             </div>
           )}
-          <div ref={bottomRef} />
         </div>
 
         {messages.length <= 1 && (
